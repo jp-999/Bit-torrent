@@ -31,7 +31,7 @@ function decodeBencode(bencodedValue) {
         // For nested lists, count 'l' and 'e' until we find matching end
         let depth = 1;
         let i = 1;  // Start after the 'l'
-        while (depth > 0) {
+        while (depth > 0 && i < remainingData.length) {
           if (remainingData[i] === 'l') depth++;
           if (remainingData[i] === 'e') depth--;
           i++;
@@ -40,6 +40,7 @@ function decodeBencode(bencodedValue) {
       }
     }
     
+    currentIndex++; // Skip the closing 'e'
     return result;
   }
   
@@ -96,7 +97,7 @@ function decodeBencode(bencodedValue) {
   }
   
   // If the input doesn't match integer or string format, throw an error
-  throw new Error("Only strings, integers, and lists are supported at the moment");
+  throw new Error("Only strings and integers are supported at the moment");
 }
 
 function main() {
@@ -109,7 +110,7 @@ function main() {
   if (command === "decode") {
     const bencodedValue = process.argv[3];
   
-    // In JavaScript, there's no need to manually convert bytes to string for printing
+    
     // because JS doesn't distinguish between bytes and strings in the same way Python does.
     console.log(JSON.stringify(decodeBencode(bencodedValue)));
   } else {
