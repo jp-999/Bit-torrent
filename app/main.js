@@ -5,16 +5,42 @@ const util = require("util");
 // - decodeBencode("5:hello") -> "hello"
 // - decodeBencode("10:hello12345") -> "hello12345"
 function decodeBencode(bencodedValue) {
-  // Check if the first character is a digit
+  // Handle integers (format: i<number>e)
+  if (bencodedValue[0] === 'i') {
+    const lastIndex = bencodedValue.indexOf('e');
+    if (lastIndex === -1) {
+      throw new Error("Invalid integer encoding: missing 'e' terminator");
+    }
+    const numberStr = bencodedValue.substring(1, lastIndex);
+    
+    // Check for invalid integer formats
+    if (numberStr.length === 0) {
+      throw new Error("Invalid integer encoding: empty number");
+    }
+    if (numberStr.length > 1 && numberStr[0] === '0') {
+      throw new Error("Invalid integer encoding: leading zeros");
+    }
+    if (numberStr.length > 1 && numberStr[0] === '-' && numberStr[1] === '0') {
+      throw new Error("Invalid integer encoding: negative zero");
+    }
+    
+    const number = parseInt(numberStr, 10);
+    if (isNaN(number)) {
+      throw new Error("Invalid integer encoding: not a number");
+    }
+    return number;
+  }
+  
+  // Handle strings (existing code)
   if (!isNaN(bencodedValue[0])) {
     const firstColonIndex = bencodedValue.indexOf(":");
     if (firstColonIndex === -1) {
       throw new Error("Invalid encoded value");
     }
     return bencodedValue.substr(firstColonIndex + 1);
-  } else {
-    throw new Error("Only strings are supported at the moment");
   }
+  
+  throw new Error("Only strings and integers are supported at the moment");
 }
 
 function main() {
