@@ -37,7 +37,7 @@ function decodeBencode(bencodedValue) {
     
     return result;
   }
-
+  
   // Check if the input starts with 'i' which indicates a bencoded integer
   if (bencodedValue[0] === 'i') {
     // Find the position of the closing 'e' that marks the end of the integer
@@ -74,7 +74,6 @@ function decodeBencode(bencodedValue) {
   }
   
   // Handle bencoded strings (format: <length>:<string>)
-  // Check if the first character is a number (string length)
   if (!isNaN(bencodedValue[0])) {
     // Find the colon that separates length from content
     const firstColonIndex = bencodedValue.indexOf(":");
