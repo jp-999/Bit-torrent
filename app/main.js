@@ -14,29 +14,34 @@ function decodeBencode(bencodedValue) {
     while (currentIndex < bencodedValue.length && bencodedValue[currentIndex] !== 'e') {
       // Get the substring from current position to end
       const remainingData = bencodedValue.slice(currentIndex);
-      // Recursively decode the next element
-      const decodedValue = decodeBencode(remainingData);
-      result.push(decodedValue);
       
-      // Move the index past the current element
-      if (typeof decodedValue === 'string') {
-        // For strings, skip past the length prefix, colon, and string content
-        const lengthStr = remainingData.substring(0, remainingData.indexOf(':'));
-        currentIndex += lengthStr.length + 1 + parseInt(lengthStr, 10);
-      } else if (typeof decodedValue === 'number') {
-        // For integers, skip past 'i', the number, and 'e'
-        const endIndex = remainingData.indexOf('e');
-        currentIndex += endIndex + 1;
-      } else if (Array.isArray(decodedValue)) {
-        // For nested lists, count 'l' and 'e' until we find matching end
+      // Handle nested lists by counting l/e pairs
+      if (remainingData[0] === 'l') {
         let depth = 1;
-        let i = 1;  // Start after the 'l'
+        let i = 1;
         while (depth > 0 && i < remainingData.length) {
           if (remainingData[i] === 'l') depth++;
           if (remainingData[i] === 'e') depth--;
           i++;
         }
+        const nestedList = remainingData.slice(0, i);
+        const decodedValue = decodeBencode(nestedList);
+        result.push(decodedValue);
         currentIndex += i;
+        continue;
+      }
+      
+      // Handle other types (strings and integers)
+      const decodedValue = decodeBencode(remainingData);
+      result.push(decodedValue);
+      
+      // Move the index past the current element
+      if (typeof decodedValue === 'string') {
+        const lengthStr = remainingData.substring(0, remainingData.indexOf(':'));
+        currentIndex += lengthStr.length + 1 + parseInt(lengthStr, 10);
+      } else if (typeof decodedValue === 'number') {
+        const endIndex = remainingData.indexOf('e');
+        currentIndex += endIndex + 1;
       }
     }
     
@@ -97,7 +102,7 @@ function decodeBencode(bencodedValue) {
   }
   
   // If the input doesn't match integer or string format, throw an error
-  throw new Error("Only strings and integers are supported at the moment");
+  throw new Error("Only strings, integers, and lists are supported at the moment");
 }
 
 function main() {
