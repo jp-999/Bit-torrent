@@ -27,12 +27,17 @@ function decodeBencode(bencodedValue) {
         // For integers, skip past 'i', the number, and 'e'
         const endIndex = remainingData.indexOf('e');
         currentIndex += endIndex + 1;
+      } else if (Array.isArray(decodedValue)) {
+        // For nested lists, count 'l' and 'e' until we find matching end
+        let depth = 1;
+        let i = 1;  // Start after the 'l'
+        while (depth > 0) {
+          if (remainingData[i] === 'l') depth++;
+          if (remainingData[i] === 'e') depth--;
+          i++;
+        }
+        currentIndex += i;
       }
-    }
-    
-    // Ensure the list is properly terminated
-    if (currentIndex >= bencodedValue.length || bencodedValue[currentIndex] !== 'e') {
-      throw new Error("Invalid list encoding: missing 'e' terminator");
     }
     
     return result;
@@ -74,6 +79,7 @@ function decodeBencode(bencodedValue) {
   }
   
   // Handle bencoded strings (format: <length>:<string>)
+  // Check if the first character is a number (string length)
   if (!isNaN(bencodedValue[0])) {
     // Find the colon that separates length from content
     const firstColonIndex = bencodedValue.indexOf(":");
@@ -89,6 +95,7 @@ function decodeBencode(bencodedValue) {
     return bencodedValue.substr(firstColonIndex + 1, length);
   }
   
+  // If the input doesn't match integer or string format, throw an error
   throw new Error("Only strings, integers, and lists are supported at the moment");
 }
 
