@@ -5,6 +5,39 @@ const util = require("util");
 // - decodeBencode("5:hello") -> "hello"
 // - decodeBencode("10:hello12345") -> "hello12345"
 function decodeBencode(bencodedValue) {
+  // Handle lists (format: l<bencoded_elements>e)
+  if (bencodedValue[0] === 'l') {
+    const result = [];
+    let currentIndex = 1;  // Skip the initial 'l'
+    
+    // Continue parsing elements until we hit the end marker 'e'
+    while (currentIndex < bencodedValue.length && bencodedValue[currentIndex] !== 'e') {
+      // Get the substring from current position to end
+      const remainingData = bencodedValue.slice(currentIndex);
+      // Recursively decode the next element
+      const decodedValue = decodeBencode(remainingData);
+      result.push(decodedValue);
+      
+      // Move the index past the current element
+      if (typeof decodedValue === 'string') {
+        // For strings, skip past the length prefix, colon, and string content
+        const lengthStr = remainingData.substring(0, remainingData.indexOf(':'));
+        currentIndex += lengthStr.length + 1 + parseInt(lengthStr, 10);
+      } else if (typeof decodedValue === 'number') {
+        // For integers, skip past 'i', the number, and 'e'
+        const endIndex = remainingData.indexOf('e');
+        currentIndex += endIndex + 1;
+      }
+    }
+    
+    // Ensure the list is properly terminated
+    if (currentIndex >= bencodedValue.length || bencodedValue[currentIndex] !== 'e') {
+      throw new Error("Invalid list encoding: missing 'e' terminator");
+    }
+    
+    return result;
+  }
+
   // Check if the input starts with 'i' which indicates a bencoded integer
   if (bencodedValue[0] === 'i') {
     // Find the position of the closing 'e' that marks the end of the integer
@@ -57,8 +90,7 @@ function decodeBencode(bencodedValue) {
     return bencodedValue.substr(firstColonIndex + 1, length);
   }
   
-  // If the input doesn't match integer or string format, throw an error
-  throw new Error("Only strings and integers are supported at the moment");
+  throw new Error("Only strings, integers, and lists are supported at the moment");
 }
 
 function main() {
