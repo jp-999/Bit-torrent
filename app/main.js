@@ -31,13 +31,15 @@ function decodeBencode(bencodedValue) {
     return number;
   }
   
-  // Handle strings (existing code)
+  // Handle strings
   if (!isNaN(bencodedValue[0])) {
     const firstColonIndex = bencodedValue.indexOf(":");
     if (firstColonIndex === -1) {
       throw new Error("Invalid encoded value");
     }
-    return bencodedValue.substr(firstColonIndex + 1);
+    const lengthStr = bencodedValue.substring(0, firstColonIndex);
+    const length = parseInt(lengthStr, 10);
+    return bencodedValue.substr(firstColonIndex + 1, length);
   }
   
   throw new Error("Only strings and integers are supported at the moment");
