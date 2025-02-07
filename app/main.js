@@ -28,20 +28,19 @@ function decodeBencode(bencodedValue) {
         const decodedValue = decodeBencode(nestedList);
         result.push(decodedValue);
         currentIndex += i;
-        continue;
-      }
-      
-      // Handle other types (strings and integers)
-      const decodedValue = decodeBencode(remainingData);
-      result.push(decodedValue);
-      
-      // Move the index past the current element
-      if (typeof decodedValue === 'string') {
-        const lengthStr = remainingData.substring(0, remainingData.indexOf(':'));
-        currentIndex += lengthStr.length + 1 + parseInt(lengthStr, 10);
-      } else if (typeof decodedValue === 'number') {
-        const endIndex = remainingData.indexOf('e');
-        currentIndex += endIndex + 1;
+      } else {
+        // Handle other types (strings and integers)
+        const decodedValue = decodeBencode(remainingData);
+        result.push(decodedValue);
+        
+        // Move the index past the current element
+        if (typeof decodedValue === 'string') {
+          const lengthStr = remainingData.substring(0, remainingData.indexOf(':'));
+          currentIndex += lengthStr.length + 1 + parseInt(lengthStr, 10);
+        } else if (typeof decodedValue === 'number') {
+          const endIndex = remainingData.indexOf('e');
+          currentIndex += endIndex + 1;
+        }
       }
     }
     
@@ -102,7 +101,7 @@ function decodeBencode(bencodedValue) {
   }
   
   // If the input doesn't match integer or string format, throw an error
-  throw new Error("Only strings, integers, and lists are supported at the moment");
+  throw new Error("Only strings and integers are supported at the moment");
 }
 
 function main() {
