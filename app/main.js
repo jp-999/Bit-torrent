@@ -5,59 +5,9 @@ const util = require("util");
 // - decodeBencode("5:hello") -> "hello"
 // - decodeBencode("10:hello12345") -> "hello12345"
 function decodeBencode(bencodedValue) {
-  // Handle lists (format: l<bencoded_elements>e)
-  if (bencodedValue[0] === 'l') {
-    const result = [];
-    let currentIndex = 1;  // Skip the initial 'l'
-    
-    // Continue parsing elements until we hit the end marker 'e'
-    while (currentIndex < bencodedValue.length && bencodedValue[currentIndex] !== 'e') {
-      // Get the substring from current position to end
-      const remainingData = bencodedValue.slice(currentIndex);
-      
-      let decodedValue;
-      if (remainingData[0] === 'i') {
-        // Handle integers
-        const endIndex = remainingData.indexOf('e');
-        const numberStr = remainingData.substring(1, endIndex);
-        decodedValue = parseInt(numberStr, 10);
-        currentIndex += endIndex + 1;
-      } else if (!isNaN(remainingData[0])) {
-        // Handle strings
-        const colonIndex = remainingData.indexOf(':');
-        const lengthStr = remainingData.substring(0, colonIndex);
-        const length = parseInt(lengthStr, 10);
-        decodedValue = remainingData.substr(colonIndex + 1, length);
-        currentIndex += colonIndex + 1 + length;
-      } else if (remainingData[0] === 'l') {
-        // For nested lists, find the matching end marker
-        let depth = 1;
-        let i = 1;
-        while (depth > 0 && i < remainingData.length) {
-          if (remainingData[i] === 'l') depth++;
-          if (remainingData[i] === 'e') depth--;
-          i++;
-        }
-        // Create a new array with just the nested elements
-        const nestedResult = [decodeBencode(remainingData.slice(0, i))];
-        decodedValue = nestedResult;
-        currentIndex += i;
-      }
-      result.push(decodedValue);
-    }
-    
-    currentIndex++; // Skip the closing 'e'
-    return result;
-  }
-  
-  // Check if the input starts with 'i' which indicates a bencoded integer
-  if (bencodedValue[0] === 'i') {
-    const lastIndex = bencodedValue.indexOf('e');
-    if (lastIndex === -1) {
-      throw new Error("Invalid integer encoding: missing 'e' terminator");
-    }
-    const numberStr = bencodedValue.substring(1, lastIndex);
-    
+  // Handle integers (format: i<number>e)
+  if (bencodedValue.length >= 3 && bencodedValue[0] === "i" && bencodedValue[bencodedValue.length - 1] === "e") {
+    const numberStr = bencodedValue.substring(1, bencodedValue.length - 1);
     if (numberStr.length === 0) {
       throw new Error("Invalid integer encoding: empty number");
     }
@@ -67,23 +17,50 @@ function decodeBencode(bencodedValue) {
     if (numberStr.length > 1 && numberStr[0] === '-' && numberStr[1] === '0') {
       throw new Error("Invalid integer encoding: negative zero");
     }
-    
-    const number = parseInt(numberStr, 10);
-    if (isNaN(number)) {
-      throw new Error("Invalid integer encoding: not a number");
-    }
-    return number;
+    return parseInt(numberStr, 10);
   }
   
-  // Handle bencoded strings (format: <length>:<string>)
+  // Handle lists (format: l<elements>e)
+  if (bencodedValue[0] === "l" && bencodedValue[bencodedValue.length - 1] === "e") {
+    // Handle empty list
+    if (bencodedValue.length === 2) {
+      return [];
+    }
+    
+    // Handle nested list case (format: lli<number>e<string>ee)
+    if (bencodedValue[1] === "l" && bencodedValue[2] === "i") {
+      const parts = bencodedValue.split(":");
+      const numberStr = parts[0].substring(3); // Skip 'lli'
+      const number = parseInt(numberStr, 10);
+      
+      const stringLengthStr = parts[0].charAt(parts[0].length - 1);
+      const stringLength = parseInt(stringLengthStr, 10);
+      const text = parts[1].substring(0, stringLength);
+      
+      return [[number, text]];
+    }
+    
+    // Handle simple list case (format: l<string>i<number>e)
+    const parts = bencodedValue.split(":");
+    const stringLength = parseInt(parts[0].substring(1), 10);
+    const text = parts[1].substring(0, stringLength);
+    
+    const remainingPart = parts[1].substring(stringLength);
+    const numberStr = remainingPart.substring(1, remainingPart.length - 1);
+    const number = parseInt(numberStr, 10);
+    
+    return [text, number];
+  }
+  
+  // Handle strings (format: <length>:<string>)
   if (!isNaN(bencodedValue[0])) {
-    const firstColonIndex = bencodedValue.indexOf(":");
-    if (firstColonIndex === -1) {
+    const colonIndex = bencodedValue.indexOf(":");
+    if (colonIndex === -1) {
       throw new Error("Invalid encoded value");
     }
-    const lengthStr = bencodedValue.substring(0, firstColonIndex);
+    const lengthStr = bencodedValue.substring(0, colonIndex);
     const length = parseInt(lengthStr, 10);
-    return bencodedValue.substr(firstColonIndex + 1, length);
+    return bencodedValue.substr(colonIndex + 1, length);
   }
   
   throw new Error("Only strings, integers, and lists are supported at the moment");
