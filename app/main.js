@@ -38,15 +38,9 @@ function decodeBencode(bencodedValue) {
           if (remainingData[i] === 'e') depth--;
           i++;
         }
-        // Instead of recursively decoding the entire nested list,
-        // we'll continue processing elements within this list
-        const innerList = [];
-        const nestedContent = remainingData.slice(1, i - 1);
-        if (nestedContent.length > 0) {
-          const nestedElements = decodeBencode('l' + nestedContent + 'e');
-          innerList.push(...nestedElements);
-        }
-        decodedValue = innerList;
+        // Create a new array with just the nested elements
+        const nestedResult = [decodeBencode(remainingData.slice(0, i))];
+        decodedValue = nestedResult;
         currentIndex += i;
       }
       result.push(decodedValue);
