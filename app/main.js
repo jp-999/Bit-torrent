@@ -28,19 +28,21 @@ function decodeBencode(bencodedValue) {
         const decodedValue = decodeBencode(nestedList);
         result.push(decodedValue);
         currentIndex += i;
+      } else if (remainingData[0] === 'i') {
+        // Handle integers
+        const endIndex = remainingData.indexOf('e');
+        const numberStr = remainingData.substring(1, endIndex);
+        const number = parseInt(numberStr, 10);
+        result.push(number);
+        currentIndex += endIndex + 1;
       } else {
-        // Handle other types (strings and integers)
-        const decodedValue = decodeBencode(remainingData);
-        result.push(decodedValue);
-        
-        // Move the index past the current element
-        if (typeof decodedValue === 'string') {
-          const lengthStr = remainingData.substring(0, remainingData.indexOf(':'));
-          currentIndex += lengthStr.length + 1 + parseInt(lengthStr, 10);
-        } else if (typeof decodedValue === 'number') {
-          const endIndex = remainingData.indexOf('e');
-          currentIndex += endIndex + 1;
-        }
+        // Handle strings
+        const colonIndex = remainingData.indexOf(':');
+        const lengthStr = remainingData.substring(0, colonIndex);
+        const length = parseInt(lengthStr, 10);
+        const str = remainingData.substr(colonIndex + 1, length);
+        result.push(str);
+        currentIndex += colonIndex + 1 + length;
       }
     }
     
@@ -50,58 +52,41 @@ function decodeBencode(bencodedValue) {
   
   // Check if the input starts with 'i' which indicates a bencoded integer
   if (bencodedValue[0] === 'i') {
-    // Find the position of the closing 'e' that marks the end of the integer
     const lastIndex = bencodedValue.indexOf('e');
-    // If there's no closing 'e', the integer encoding is invalid
     if (lastIndex === -1) {
       throw new Error("Invalid integer encoding: missing 'e' terminator");
     }
-    // Extract the number string between 'i' and 'e'
     const numberStr = bencodedValue.substring(1, lastIndex);
     
-    // Validation checks for integer format
-    // Check if the number string is empty (i.e., "ie")
     if (numberStr.length === 0) {
       throw new Error("Invalid integer encoding: empty number");
     }
-    // Check for leading zeros which are not allowed (i.e., "i052e")
     if (numberStr.length > 1 && numberStr[0] === '0') {
       throw new Error("Invalid integer encoding: leading zeros");
     }
-    // Check for negative zero which is not allowed (i.e., "i-0e")
     if (numberStr.length > 1 && numberStr[0] === '-' && numberStr[1] === '0') {
       throw new Error("Invalid integer encoding: negative zero");
     }
     
-    // Convert the string to an actual integer
     const number = parseInt(numberStr, 10);
-    // Ensure the parsed value is actually a number
     if (isNaN(number)) {
       throw new Error("Invalid integer encoding: not a number");
     }
-    // Return the parsed integer
     return number;
   }
   
   // Handle bencoded strings (format: <length>:<string>)
-  // Check if the first character is a number (string length)
   if (!isNaN(bencodedValue[0])) {
-    // Find the colon that separates length from content
     const firstColonIndex = bencodedValue.indexOf(":");
-    // If there's no colon, the string encoding is invalid
     if (firstColonIndex === -1) {
       throw new Error("Invalid encoded value");
     }
-    // Extract the length prefix before the colon
     const lengthStr = bencodedValue.substring(0, firstColonIndex);
-    // Convert the length string to a number
     const length = parseInt(lengthStr, 10);
-    // Return the substring of specified length after the colon
     return bencodedValue.substr(firstColonIndex + 1, length);
   }
   
-  // If the input doesn't match integer or string format, throw an error
-  throw new Error("Only strings and integers are supported at the moment");
+  throw new Error("Only strings, integers, and lists are supported at the moment");
 }
 
 function main() {
