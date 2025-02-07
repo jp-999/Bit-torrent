@@ -15,8 +15,22 @@ function decodeBencode(bencodedValue) {
       // Get the substring from current position to end
       const remainingData = bencodedValue.slice(currentIndex);
       
-      // Handle nested lists by counting l/e pairs
-      if (remainingData[0] === 'l') {
+      let decodedValue;
+      if (remainingData[0] === 'i') {
+        // Handle integers
+        const endIndex = remainingData.indexOf('e');
+        const numberStr = remainingData.substring(1, endIndex);
+        decodedValue = parseInt(numberStr, 10);
+        currentIndex += endIndex + 1;
+      } else if (!isNaN(remainingData[0])) {
+        // Handle strings
+        const colonIndex = remainingData.indexOf(':');
+        const lengthStr = remainingData.substring(0, colonIndex);
+        const length = parseInt(lengthStr, 10);
+        decodedValue = remainingData.substr(colonIndex + 1, length);
+        currentIndex += colonIndex + 1 + length;
+      } else if (remainingData[0] === 'l') {
+        // For nested lists, find the matching end marker
         let depth = 1;
         let i = 1;
         while (depth > 0 && i < remainingData.length) {
@@ -24,26 +38,18 @@ function decodeBencode(bencodedValue) {
           if (remainingData[i] === 'e') depth--;
           i++;
         }
-        const nestedList = remainingData.slice(0, i);
-        const decodedValue = decodeBencode(nestedList);
-        result.push(decodedValue);
+        // Instead of recursively decoding the entire nested list,
+        // we'll continue processing elements within this list
+        const innerList = [];
+        const nestedContent = remainingData.slice(1, i - 1);
+        if (nestedContent.length > 0) {
+          const nestedElements = decodeBencode('l' + nestedContent + 'e');
+          innerList.push(...nestedElements);
+        }
+        decodedValue = innerList;
         currentIndex += i;
-      } else if (remainingData[0] === 'i') {
-        // Handle integers
-        const endIndex = remainingData.indexOf('e');
-        const numberStr = remainingData.substring(1, endIndex);
-        const number = parseInt(numberStr, 10);
-        result.push(number);
-        currentIndex += endIndex + 1;
-      } else {
-        // Handle strings
-        const colonIndex = remainingData.indexOf(':');
-        const lengthStr = remainingData.substring(0, colonIndex);
-        const length = parseInt(lengthStr, 10);
-        const str = remainingData.substr(colonIndex + 1, length);
-        result.push(str);
-        currentIndex += colonIndex + 1 + length;
       }
+      result.push(decodedValue);
     }
     
     currentIndex++; // Skip the closing 'e'
