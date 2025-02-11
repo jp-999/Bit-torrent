@@ -1,5 +1,6 @@
 const process = require("process");
 const util = require("util");
+const fs = require("fs");
 // Examples:
 // - decodeBencode("5:hello") -> "hello"
 // - decodeBencode("10:hello12345") -> "hello12345"
@@ -163,15 +164,41 @@ function decodeNextElement(bencodedValue) {
     throw new Error("Only strings, integers, lists, and dictionaries are supported");
 }
 
+// Function to parse torrent file and extract info
+function parseTorrentFile(filePath) {
+    // Read the torrent file as a buffer to handle non-UTF8 characters
+    const fileContent = fs.readFileSync(filePath);
+    
+    // Decode the bencoded content
+    const torrentData = decodeBencode(fileContent.toString('binary'));
+    
+    // Extract required information
+    const trackerUrl = torrentData.announce;
+    const fileLength = torrentData.info.length;
+    
+    return {
+        trackerUrl,
+        fileLength
+    };
+}
+
 // Main program entry point
 function main() {
     // Get command from command line arguments
     const command = process.argv[2];
+    
     if (command === "decode") {
-        // Get bencoded value from command line arguments
+        // Handle decode command
         const bencodedValue = process.argv[3];
-        // Decode and print result as JSON
         console.log(JSON.stringify(decodeBencode(bencodedValue)));
+    } else if (command === "info") {
+        // Handle info command
+        const torrentFile = process.argv[3];
+        const torrentInfo = parseTorrentFile(torrentFile);
+        
+        // Print torrent information in required format
+        console.log(`Tracker URL: ${torrentInfo.trackerUrl}`);
+        console.log(`Length: ${torrentInfo.fileLength}`);
     } else {
         throw new Error(`Unknown command ${command}`);
     }
