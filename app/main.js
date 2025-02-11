@@ -4,54 +4,103 @@ const util = require("util");
 // - decodeBencode("5:hello") -> "hello"
 // - decodeBencode("10:hello12345") -> "hello12345"
 function decodeBencode(bencodedValue) {
-  if(bencodedValue[0] === "l" && bencodedValue[bencodedValue.length - 1] === "e") {
-    const list = [];
-    let i = 1;
-    const lastIndex = bencodedValue.length - 1;
-    while(i < lastIndex) {
-      const value = bencodedValue[i];
-      if(value === "i") {
-        // get first index of e
-        const end = bencodedValue.indexOf("e", i);
-        list.push(parseInt(bencodedValue.substring(i+1, end)));
-        i = end + 1;
-      } else if(!isNaN(value)) {
-        const parts = bencodedValue.substring(i).split(":");
-        const length = parseInt(parts[0], 10);
-        list.push(parts[1].substr(0, length));
-        i += parts[0].length + length+1;
-      } else if(value === "l") {
-        // get last e
-        const end = bencodedValue.length - 1;
-        list.push(decodeBencode(bencodedValue.substring(i, end)));
-        i = end + 1;
-      }
+    if (bencodedValue[0] === 'i') {
+        // Decode integer
+        const endIndex = bencodedValue.indexOf('e');
+        const numberStr = bencodedValue.substring(1, endIndex);
+        
+        // Validate integer format
+        if (numberStr.length === 0) {
+            throw new Error("Invalid integer encoding: empty number");
+        }
+        if (numberStr.length > 1 && numberStr[0] === '0') {
+            throw new Error("Invalid integer encoding: leading zeros");
+        }
+        if (numberStr.length > 1 && numberStr[0] === '-' && numberStr[1] === '0') {
+            throw new Error("Invalid integer encoding: negative zero");
+        }
+        
+        return parseInt(numberStr, 10);
     }
-    return list;
-  }
-  if (!isNaN(bencodedValue[0])) {
-    // Check if the first character is a digit
-    const parts = bencodedValue.split(":");
-    const length = parseInt(parts[0], 10);
-    return parts[1].substr(0, length);
-  } else {
-    const output = bencodedValue.replace(/[ie]+/g, "");
-    return parseInt(output);
-  }
+    
+    if (bencodedValue[0] === 'l') {
+        // Decode list
+        const list = [];
+        let index = 1; // Start after the 'l'
+        
+        while (index < bencodedValue.length && bencodedValue[index] !== 'e') {
+            const { value, length } = decodeNextElement(bencodedValue.slice(index));
+            if (Array.isArray(value) && value.length === 1) {
+                // Special case for nested lists with single elements
+                list.push([value[0]]);
+            } else {
+                list.push(value);
+            }
+            index += length;
+        }
+        
+        return list;
+    }
+    
+    if (!isNaN(bencodedValue[0])) {
+        // Decode string
+        const colonIndex = bencodedValue.indexOf(':');
+        const length = parseInt(bencodedValue.substring(0, colonIndex), 10);
+        return bencodedValue.substr(colonIndex + 1, length);
+    }
+    
+    throw new Error("Only strings, integers, and lists are supported");
 }
+
+function decodeNextElement(bencodedValue) {
+    if (bencodedValue[0] === 'i') {
+        // Decode integer
+        const endIndex = bencodedValue.indexOf('e');
+        const numberStr = bencodedValue.substring(1, endIndex);
+        return {
+            value: parseInt(numberStr, 10),
+            length: endIndex + 1
+        };
+    }
+    
+    if (bencodedValue[0] === 'l') {
+        // Decode list
+        const list = [];
+        let index = 1;
+        
+        while (index < bencodedValue.length && bencodedValue[index] !== 'e') {
+            const { value, length } = decodeNextElement(bencodedValue.slice(index));
+            list.push(value);
+            index += length;
+        }
+        
+        return {
+            value: list,
+            length: index + 1
+        };
+    }
+    
+    if (!isNaN(bencodedValue[0])) {
+        // Decode string
+        const colonIndex = bencodedValue.indexOf(':');
+        const length = parseInt(bencodedValue.substring(0, colonIndex), 10);
+        return {
+            value: bencodedValue.substr(colonIndex + 1, length),
+            length: colonIndex + 1 + length
+        };
+    }
+    
+    throw new Error("Only strings, integers, and lists are supported");
+}
+
 function main() {
-  const command = process.argv[2];
-  // You can use print statements as follows for debugging, they'll be visible when running tests.
-  // console.log("Logs from your program will appear here!");
-  // Uncomment this block to pass the first stage
-  if (command === "decode") {
-    const bencodedValue = process.argv[3];
-  
-    // In JavaScript, there's no need to manually convert bytes to string for printing
-    // because JS doesn't distinguish between bytes and strings in the same way Python does.
-    console.log(JSON.stringify(decodeBencode(bencodedValue)));
-  } else {
-    throw new Error(`Unknown command ${command}`);
-  }
+    const command = process.argv[2];
+    if (command === "decode") {
+        const bencodedValue = process.argv[3];
+        console.log(JSON.stringify(decodeBencode(bencodedValue)));
+    } else {
+        throw new Error(`Unknown command ${command}`);
+    }
 }
+
 main();
