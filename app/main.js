@@ -26,12 +26,11 @@ function decodeBencode(bencodedValue) {
     if (bencodedValue[0] === 'l') {
         // Decode list
         const list = [];
-        let index = 1; // Start after the 'l'
+        let index = 1;
         
         while (index < bencodedValue.length && bencodedValue[index] !== 'e') {
             const { value, length } = decodeNextElement(bencodedValue.slice(index));
             if (Array.isArray(value) && value.length === 1) {
-                // Special case for nested lists with single elements
                 list.push([value[0]]);
             } else {
                 list.push(value);
@@ -42,6 +41,29 @@ function decodeBencode(bencodedValue) {
         return list;
     }
     
+    if (bencodedValue[0] === 'd') {
+        // Decode dictionary
+        const dict = {};
+        let index = 1;
+        
+        while (index < bencodedValue.length && bencodedValue[index] !== 'e') {
+            // Get key
+            const { value: key, length: keyLength } = decodeNextElement(bencodedValue.slice(index));
+            if (typeof key !== 'string') {
+                throw new Error("Dictionary keys must be strings");
+            }
+            index += keyLength;
+            
+            // Get value
+            const { value, length: valueLength } = decodeNextElement(bencodedValue.slice(index));
+            index += valueLength;
+            
+            dict[key] = value;
+        }
+        
+        return dict;
+    }
+    
     if (!isNaN(bencodedValue[0])) {
         // Decode string
         const colonIndex = bencodedValue.indexOf(':');
@@ -49,7 +71,7 @@ function decodeBencode(bencodedValue) {
         return bencodedValue.substr(colonIndex + 1, length);
     }
     
-    throw new Error("Only strings, integers, and lists are supported");
+    throw new Error("Only strings, integers, lists, and dictionaries are supported");
 }
 
 function decodeNextElement(bencodedValue) {
@@ -80,6 +102,32 @@ function decodeNextElement(bencodedValue) {
         };
     }
     
+    if (bencodedValue[0] === 'd') {
+        // Decode dictionary
+        const dict = {};
+        let index = 1;
+        
+        while (index < bencodedValue.length && bencodedValue[index] !== 'e') {
+            // Get key
+            const { value: key, length: keyLength } = decodeNextElement(bencodedValue.slice(index));
+            if (typeof key !== 'string') {
+                throw new Error("Dictionary keys must be strings");
+            }
+            index += keyLength;
+            
+            // Get value
+            const { value, length: valueLength } = decodeNextElement(bencodedValue.slice(index));
+            index += valueLength;
+            
+            dict[key] = value;
+        }
+        
+        return {
+            value: dict,
+            length: index + 1
+        };
+    }
+    
     if (!isNaN(bencodedValue[0])) {
         // Decode string
         const colonIndex = bencodedValue.indexOf(':');
@@ -90,7 +138,7 @@ function decodeNextElement(bencodedValue) {
         };
     }
     
-    throw new Error("Only strings, integers, and lists are supported");
+    throw new Error("Only strings, integers, lists, and dictionaries are supported");
 }
 
 function main() {
