@@ -32,6 +32,13 @@ function decodeBencode(bencodedValue) {
         return dict;
     }
     
+    // Check if value is an integer (starts with 'i')
+    if (bencodedValue[0] === 'i') {
+        const endIndex = bencodedValue.indexOf('e');
+        const numberStr = bencodedValue.substring(1, endIndex);
+        return parseInt(numberStr, 10);
+    }
+    
     // Check if value is a string (starts with a number)
     if (!isNaN(bencodedValue[0])) {
         // Find the colon separator
@@ -73,6 +80,15 @@ function decodeNextElement(bencodedValue) {
         };
     }
     
+    // Handle integers
+    if (bencodedValue[0] === 'i') {
+        const endIndex = bencodedValue.indexOf('e');
+        return {
+            value: parseInt(bencodedValue.substring(1, endIndex), 10),
+            length: endIndex + 1
+        };
+    }
+    
     // Handle strings
     if (!isNaN(bencodedValue[0])) {
         const colonIndex = bencodedValue.indexOf(':');
@@ -97,11 +113,13 @@ function parseTorrentFile(filePath) {
     // Decode the bencoded content
     const torrentData = decodeBencode(content);
     
-    // Extract tracker URL
+    // Extract tracker URL and file length
     const trackerUrl = torrentData.announce;
+    const fileLength = torrentData.info.length;
     
     return {
-        trackerUrl
+        trackerUrl,
+        fileLength
     };
 }
 
@@ -116,6 +134,7 @@ function main() {
         const torrentFile = process.argv[3];
         const torrentInfo = parseTorrentFile(torrentFile);
         console.log(`Tracker URL: ${torrentInfo.trackerUrl}`);
+        console.log(`Length: ${torrentInfo.fileLength}`);
     } else {
         throw new Error(`Unknown command ${command}`);
     }
