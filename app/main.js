@@ -5,6 +5,20 @@ const fs = require("fs");
 // - decodeBencode("10:hello12345") -> "hello12345"
 // Main function to decode bencoded values
 function decodeBencode(bencodedValue) {
+    // Handle lists (starts with 'l')
+    if (bencodedValue[0] === 'l') {
+        const list = [];
+        let index = 1;
+        
+        while (index < bencodedValue.length && bencodedValue[index] !== 'e') {
+            const { value, length } = decodeNextElement(bencodedValue.slice(index));
+            list.push(value);
+            index += length;
+        }
+        
+        return list;
+    }
+    
     // Check if value is a dictionary (starts with 'd')
     if (bencodedValue[0] === 'd') {
         // Initialize empty dictionary and index
@@ -60,14 +74,12 @@ function decodeNextElement(bencodedValue) {
         let index = 1;
         
         while (index < bencodedValue.length && bencodedValue[index] !== 'e') {
-            // Get key
             const { value: key, length: keyLength } = decodeNextElement(bencodedValue.slice(index));
             if (typeof key !== 'string') {
                 throw new Error("Dictionary keys must be strings");
             }
             index += keyLength;
             
-            // Get value
             const { value, length: valueLength } = decodeNextElement(bencodedValue.slice(index));
             index += valueLength;
             
@@ -76,6 +88,23 @@ function decodeNextElement(bencodedValue) {
         
         return {
             value: dict,
+            length: index + 1
+        };
+    }
+    
+    // Handle lists
+    if (bencodedValue[0] === 'l') {
+        const list = [];
+        let index = 1;
+        
+        while (index < bencodedValue.length && bencodedValue[index] !== 'e') {
+            const { value, length } = decodeNextElement(bencodedValue.slice(index));
+            list.push(value);
+            index += length;
+        }
+        
+        return {
+            value: list,
             length: index + 1
         };
     }
@@ -107,31 +136,19 @@ function parseTorrentFile(filePath) {
     // Read the torrent file as a buffer
     const buffer = fs.readFileSync(filePath);
     
-    // Convert buffer to string using latin1 encoding to preserve byte values
+    // Convert buffer to string
     const content = buffer.toString('latin1');
     
     // Decode the bencoded content
     const torrentData = decodeBencode(content);
     
-    // Extract required information
+    // Extract tracker URL and file length
     const trackerUrl = torrentData.announce;
-    const info = torrentData.info;
-    
-    // Validate required fields
-    if (!trackerUrl || !info) {
-        throw new Error("Invalid torrent file: missing required fields");
-    }
-    
-    if (!info.length || !info.name || !info['piece length'] || !info.pieces) {
-        throw new Error("Invalid torrent file: missing required info fields");
-    }
+    const fileLength = torrentData.info.length;
     
     return {
         trackerUrl,
-        fileLength: info.length,
-        name: info.name,
-        pieceLength: info['piece length'],
-        pieces: info.pieces
+        fileLength
     };
 }
 
