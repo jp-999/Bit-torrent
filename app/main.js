@@ -132,44 +132,62 @@ function decodeNextElement(bencodedValue) {
     throw new Error("Unsupported bencoded value");
 }
 
-// Add encoding function to convert data back to bencode format
+// Converts JavaScript data structures back to bencoded format
+// Handles strings, numbers, arrays, and dictionaries
 function bencode(data) {
+    // For strings, prefix with length and colon
     if (typeof data === 'string') {
         return `${data.length}:${data}`;
+    // For numbers, wrap with 'i' and 'e'
     } else if (typeof data === 'number') {
         return `i${data}e`;
+    // For arrays, wrap items with 'l' and 'e'
     } else if (Array.isArray(data)) {
         return `l${data.map(item => bencode(item)).join('')}e`;
+    // For objects (dictionaries), wrap with 'd' and 'e'
     } else if (typeof data === 'object' && data !== null) {
-        // Sort keys to ensure consistent encoding
+        // Sort keys for consistent encoding across implementations
         const sortedKeys = Object.keys(data).sort();
         return `d${sortedKeys.map(key => bencode(key) + bencode(data[key])).join('')}e`;
     }
     throw new Error('Unsupported type for bencode');
 }
 
+// Calculates SHA1 hash of the bencoded info dictionary
+// Returns the hash in hexadecimal format
 function calculateInfoHash(info) {
+    // First bencode the info dictionary
     const bencoded = bencode(info);
+    // Create SHA1 hash object
     const hash = crypto.createHash('sha1');
+    // Update hash with bencoded data using latin1 encoding
     hash.update(bencoded, 'latin1');
+    // Return final hash in hex format
     return hash.digest('hex');
 }
 
-// Function to parse torrent file and extract info
+// Reads and parses a .torrent file, extracting key information
 function parseTorrentFile(filePath) {
+    // Read file as buffer to handle binary data
     const buffer = fs.readFileSync(filePath);
+    // Convert to string preserving byte values
     const content = buffer.toString('latin1');
+    // Parse bencoded content
     const torrentData = decodeBencode(content);
     
+    // Extract required fields
     const trackerUrl = torrentData.announce;
     const info = torrentData.info;
     
+    // Validate presence of required fields
     if (!trackerUrl || !info) {
         throw new Error("Invalid torrent file: missing required fields");
     }
     
+    // Calculate unique identifier for torrent
     const infoHash = calculateInfoHash(info);
     
+    // Return relevant torrent information
     return {
         trackerUrl,
         fileLength: info.length,
@@ -177,14 +195,16 @@ function parseTorrentFile(filePath) {
     };
 }
 
-// Main program entry point
+// Command-line interface handler
 function main() {
     const command = process.argv[2];
     
     if (command === "decode") {
+        // Decode and display bencoded value
         const bencodedValue = process.argv[3];
         console.log(JSON.stringify(decodeBencode(bencodedValue)));
     } else if (command === "info") {
+        // Parse and display torrent file information
         const torrentFile = process.argv[3];
         const torrentInfo = parseTorrentFile(torrentFile);
         console.log(`Tracker URL: ${torrentInfo.trackerUrl}`);
