@@ -1,5 +1,6 @@
 const process = require("process");
 const fs = require("fs");
+const crypto = require('crypto');
 // Examples:
 // - decodeBencode("5:hello") -> "hello"
 // - decodeBencode("10:hello12345") -> "hello12345"
@@ -131,24 +132,48 @@ function decodeNextElement(bencodedValue) {
     throw new Error("Unsupported bencoded value");
 }
 
+// Add encoding function to convert data back to bencode format
+function bencode(data) {
+    if (typeof data === 'string') {
+        return `${data.length}:${data}`;
+    } else if (typeof data === 'number') {
+        return `i${data}e`;
+    } else if (Array.isArray(data)) {
+        return `l${data.map(item => bencode(item)).join('')}e`;
+    } else if (typeof data === 'object' && data !== null) {
+        // Sort keys to ensure consistent encoding
+        const sortedKeys = Object.keys(data).sort();
+        return `d${sortedKeys.map(key => bencode(key) + bencode(data[key])).join('')}e`;
+    }
+    throw new Error('Unsupported type for bencode');
+}
+
+function calculateInfoHash(info) {
+    const bencoded = bencode(info);
+    const hash = crypto.createHash('sha1');
+    hash.update(bencoded, 'latin1');
+    return hash.digest('hex');
+}
+
 // Function to parse torrent file and extract info
 function parseTorrentFile(filePath) {
-    // Read the torrent file as a buffer
     const buffer = fs.readFileSync(filePath);
-    
-    // Convert buffer to string
     const content = buffer.toString('latin1');
-    
-    // Decode the bencoded content
     const torrentData = decodeBencode(content);
     
-    // Extract tracker URL and file length
     const trackerUrl = torrentData.announce;
-    const fileLength = torrentData.info.length;
+    const info = torrentData.info;
+    
+    if (!trackerUrl || !info) {
+        throw new Error("Invalid torrent file: missing required fields");
+    }
+    
+    const infoHash = calculateInfoHash(info);
     
     return {
         trackerUrl,
-        fileLength
+        fileLength: info.length,
+        infoHash
     };
 }
 
@@ -164,6 +189,7 @@ function main() {
         const torrentInfo = parseTorrentFile(torrentFile);
         console.log(`Tracker URL: ${torrentInfo.trackerUrl}`);
         console.log(`Length: ${torrentInfo.fileLength}`);
+        console.log(`Info Hash: ${torrentInfo.infoHash}`);
     } else {
         throw new Error(`Unknown command ${command}`);
     }
