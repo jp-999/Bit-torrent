@@ -151,7 +151,8 @@ function parseTorrentFile(filePath) {
     return {
         trackerUrl,
         fileLength: info.length,
-        infoHash
+        infoHash,
+        pieceLength: info['piece length']
     };
 }
 
@@ -168,6 +169,7 @@ function main() {
         console.log(`Tracker URL: ${torrentInfo.trackerUrl}`);
         console.log(`Length: ${torrentInfo.fileLength}`);
         console.log(`Info Hash: ${torrentInfo.infoHash}`);
+        console.log(`Piece Length: ${torrentInfo.pieceLength}`);
     } else {
         throw new Error(`Unknown command ${command}`);
     }
