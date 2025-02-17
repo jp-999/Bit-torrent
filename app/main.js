@@ -107,19 +107,31 @@ function parseTorrentFile(filePath) {
     // Read the torrent file as a buffer
     const buffer = fs.readFileSync(filePath);
     
-    // Convert buffer to string
+    // Convert buffer to string using latin1 encoding to preserve byte values
     const content = buffer.toString('latin1');
     
     // Decode the bencoded content
     const torrentData = decodeBencode(content);
     
-    // Extract tracker URL and file length
+    // Extract required information
     const trackerUrl = torrentData.announce;
-    const fileLength = torrentData.info.length;
+    const info = torrentData.info;
+    
+    // Validate required fields
+    if (!trackerUrl || !info) {
+        throw new Error("Invalid torrent file: missing required fields");
+    }
+    
+    if (!info.length || !info.name || !info['piece length'] || !info.pieces) {
+        throw new Error("Invalid torrent file: missing required info fields");
+    }
     
     return {
         trackerUrl,
-        fileLength
+        fileLength: info.length,
+        name: info.name,
+        pieceLength: info['piece length'],
+        pieces: info.pieces
     };
 }
 
