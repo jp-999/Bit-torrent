@@ -154,10 +154,15 @@ function parseTorrentFile(filePath) {
     const pieceLength = info['piece length'];
     const pieces = [];
     
-    // Convert pieces from binary to hexadecimal format
-    for (let i = 0; i < info.pieces.length; i += 20) {
-        const pieceHash = info.pieces.slice(i, i + 20);
-        pieces.push(pieceHash.toString('hex')); // Convert to hex
+    // Check if pieces exist and are in the expected format
+    if (info.pieces && typeof info.pieces === 'string') {
+        // Convert pieces from binary to hexadecimal format
+        for (let i = 0; i < info.pieces.length; i += 20) {
+            const pieceHash = info.pieces.slice(i, i + 20);
+            pieces.push(pieceHash.toString('hex')); // Convert to hex
+        }
+    } else {
+        throw new Error("Invalid torrent file: pieces are missing or not in the expected format");
     }
     
     // Return relevant torrent information
