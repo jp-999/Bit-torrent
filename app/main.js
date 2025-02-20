@@ -1,6 +1,8 @@
 const process = require("process");
 const fs = require("fs");
 const crypto = require('crypto');
+const axios = require('axios');
+const querystring = require('querystring');
 
 // Examples:
 // - decodeBencode("5:hello") -> "hello"
@@ -187,24 +189,73 @@ function calculateSHA1(buffer) {
     return crypto.createHash('sha1').update(buffer).digest('hex');
 }
 
+// Function to URL encode the info hash
+function urlEncodeInfoHash(infoHash) {
+    return Buffer.from(infoHash, 'hex').toString('binary'); // Convert hex to binary for URL encoding
+}
+
+// Function to make a request to the tracker
+async function requestTracker(trackerUrl, infoHash, port, left) {
+    const peerId = '-MYCLIENT-123456789012'; // Example peer ID (20 bytes)
+    const uploaded = 0;
+    const downloaded = 0;
+    const compact = 1;
+
+    // Construct the query parameters
+    const params = {
+        info_hash: urlEncodeInfoHash(infoHash),
+        peer_id: peerId,
+        port: port,
+        uploaded: uploaded,
+        downloaded: downloaded,
+        left: left,
+        compact: compact
+    };
+
+    // Make the GET request to the tracker
+    try {
+        const response = await axios.get(trackerUrl, { params });
+        return response.data; // Return the response data
+    } catch (error) {
+        console.error('Error contacting tracker:', error);
+        throw error; // Rethrow the error for handling
+    }
+}
+
 // Function to print torrent information
 function printTorrentInfo(torrentInfo) {
     const trackerUrl = torrentInfo.announce;
     const fileLength = torrentInfo.info.length;
-    const tmpBuff = Buffer.from(bencode(torrentInfo.info), "binary");
-    const hash = calculateSHA1(tmpBuff);
-    const pieceInfo = Buffer.from(torrentInfo.info.pieces, "binary");
-
-    // Print the extracted information
+    const infoHash = calculateSHA1(Buffer.from(bencode(torrentInfo.info), "binary"));
+    
     console.log(`Tracker URL: ${trackerUrl}`);
     console.log(`Length: ${fileLength}`);
-    console.log(`Info Hash: ${hash}`);
+    console.log(`Info Hash: ${infoHash}`);
     console.log(`Piece Length: ${torrentInfo.info['piece length']}`);
 
-    console.log('Piece Hashes:');
-    for (let i = 0; i < pieceInfo.length; i += 20) {
-        console.log(pieceInfo.slice(i, i + 20).toString("hex")); // Print each piece hash in hex format
+    // Request peers from the tracker
+    requestTracker(trackerUrl, infoHash, 6881, fileLength)
+        .then(trackerResponse => {
+            // Handle the tracker response
+            console.log('Tracker Response:', trackerResponse);
+            // Parse the response to extract peers
+            const peers = parsePeers(trackerResponse.peers);
+            console.log('Peers:', peers);
+        })
+        .catch(error => {
+            console.error('Failed to get peers from tracker:', error);
+        });
+}
+
+// Function to parse peers from the tracker response
+function parsePeers(peersString) {
+    const peers = [];
+    for (let i = 0; i < peersString.length; i += 6) {
+        const ip = peersString.slice(i, i + 4).join('.');
+        const port = peersString.readUInt16BE(i + 4);
+        peers.push({ ip, port });
     }
+    return peers;
 }
 
 // Main function to handle command-line arguments
