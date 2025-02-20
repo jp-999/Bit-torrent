@@ -161,17 +161,13 @@ function parseTorrentFile(filePath) {
     
     // Extract piece length and piece hashes
     const pieceLength = info['piece length'];
-    const pieces = [];
+    const pieces = info.pieces;
     
-    // Check if pieces exist and are in the expected format
-    if (info.pieces && typeof info.pieces === 'string') {
-        // Convert pieces from binary to hexadecimal format
-        for (let i = 0; i < info.pieces.length; i += 20) {
-            const pieceHash = info.pieces.slice(i, i + 20);
-            pieces.push(pieceHash.toString('hex')); // Convert to hex
-        }
-    } else {
-        throw new Error("Invalid torrent file: pieces are missing or not in the expected format");
+    // Convert pieces from binary to hexadecimal format
+    const pieceHashes = [];
+    for (let i = 0; i < pieces.length; i += 20) {
+        const pieceHash = pieces.slice(i, i + 20);
+        pieceHashes.push(pieceHash.toString('hex')); // Convert to hex
     }
     
     // Return relevant torrent information
@@ -180,7 +176,7 @@ function parseTorrentFile(filePath) {
         fileLength: info.length,
         infoHash,
         pieceLength,
-        pieces // Include the list of piece hashes
+        pieceHashes
     };
 }
 
