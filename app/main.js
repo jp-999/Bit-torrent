@@ -158,19 +158,32 @@ function parseTorrentFile(filePath) {
 
 // Main program entry point
 function main() {
+    // Retrieve the command-line argument for the command to execute
     const command = process.argv[2];
     
+    // Check if the command is "decode"
     if (command === "decode") {
+        // Get the bencoded value from the command-line arguments
         const bencodedValue = process.argv[3];
+        // Decode the bencoded value and print the result as a JSON string
         console.log(JSON.stringify(decodeBencode(bencodedValue)));
+    // Check if the command is "info"
     } else if (command === "info") {
+        // Get the torrent file path from the command-line arguments
         const torrentFile = process.argv[3];
+        // Parse the torrent file to extract information
         const torrentInfo = parseTorrentFile(torrentFile);
+        // Print the tracker URL from the parsed torrent information
         console.log(`Tracker URL: ${torrentInfo.trackerUrl}`);
+        // Print the length of the file from the parsed torrent information
         console.log(`Length: ${torrentInfo.fileLength}`);
+        // Print the info hash from the parsed torrent information
         console.log(`Info Hash: ${torrentInfo.infoHash}`);
+        // Print the piece length from the parsed torrent information
         console.log(`Piece Length: ${torrentInfo.pieceLength}`);
+    // Handle unknown commands
     } else {
+        // Throw an error if the command is not recognized
         throw new Error(`Unknown command ${command}`);
     }
 }
