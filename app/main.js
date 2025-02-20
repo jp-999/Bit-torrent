@@ -224,17 +224,34 @@ async function requestTracker(trackerUrl, infoHash, port, left) {
 
 // Function to print torrent information
 function printTorrentInfo(torrentInfo) {
+    // Debugging: Log the entire torrentInfo object to see its structure
+    console.log('Torrent Info:', torrentInfo);
+
     const trackerUrl = torrentInfo.announce;
-    const fileLength = torrentInfo.info.length;
-    const infoHash = calculateSHA1(Buffer.from(bencode(torrentInfo.info), "binary"));
-    
+
+    // Check if info is defined and has the expected structure
+    if (!torrentInfo.info) {
+        throw new Error("Invalid torrent info: missing 'info' property");
+    }
+
+    const fileLength = torrentInfo.info.length; // This line may throw an error if info is undefined
+    const tmpBuff = Buffer.from(bencode(torrentInfo.info), "binary");
+    const hash = calculateSHA1(tmpBuff);
+    const pieceInfo = Buffer.from(torrentInfo.info.pieces, "binary");
+
+    // Print the extracted information
     console.log(`Tracker URL: ${trackerUrl}`);
     console.log(`Length: ${fileLength}`);
-    console.log(`Info Hash: ${infoHash}`);
+    console.log(`Info Hash: ${hash}`);
     console.log(`Piece Length: ${torrentInfo.info['piece length']}`);
 
+    console.log('Piece Hashes:');
+    for (let i = 0; i < pieceInfo.length; i += 20) {
+        console.log(pieceInfo.slice(i, i + 20).toString("hex")); // Print each piece hash in hex format
+    }
+
     // Request peers from the tracker
-    requestTracker(trackerUrl, infoHash, 6881, fileLength)
+    requestTracker(trackerUrl, hash, 6881, fileLength)
         .then(trackerResponse => {
             // Handle the tracker response
             console.log('Tracker Response:', trackerResponse);
