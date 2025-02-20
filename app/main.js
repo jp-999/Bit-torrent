@@ -132,27 +132,41 @@ function parseTorrentFile(filePath) {
     // Read the torrent file as a buffer
     const buffer = fs.readFileSync(filePath);
     
-    // Convert buffer to string
+    // Convert buffer to string using latin1 encoding to preserve byte values
     const content = buffer.toString('latin1');
     
     // Decode the bencoded content
     const torrentData = decodeBencode(content);
     
-    // Extract tracker URL and file length
+    // Extract required information
     const trackerUrl = torrentData.announce;
     const info = torrentData.info;
     
+    // Validate required fields
     if (!trackerUrl || !info) {
         throw new Error("Invalid torrent file: missing required fields");
     }
     
+    // Calculate unique identifier for torrent
     const infoHash = calculateInfoHash(info);
     
+    // Extract piece length and piece hashes
+    const pieceLength = info['piece length'];
+    const pieces = [];
+    
+    // Convert pieces from binary to hexadecimal format
+    for (let i = 0; i < info.pieces.length; i += 20) {
+        const pieceHash = info.pieces.slice(i, i + 20);
+        pieces.push(pieceHash.toString('hex')); // Convert to hex
+    }
+    
+    // Return relevant torrent information
     return {
         trackerUrl,
         fileLength: info.length,
         infoHash,
-        pieceLength: info['piece length']
+        pieceLength,
+        pieces // Include the list of piece hashes
     };
 }
 
@@ -181,6 +195,8 @@ function main() {
         console.log(`Info Hash: ${torrentInfo.infoHash}`);
         // Print the piece length from the parsed torrent information
         console.log(`Piece Length: ${torrentInfo.pieceLength}`);
+        // Print the piece hashes from the parsed torrent information
+        console.log(`Piece Hashes: ${torrentInfo.pieces.join(', ')}`);
     // Handle unknown commands
     } else {
         // Throw an error if the command is not recognized
