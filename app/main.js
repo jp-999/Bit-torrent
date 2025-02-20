@@ -175,21 +175,48 @@ function parseTorrentFile(filePath) {
     };
 }
 
+// Function to calculate SHA1 hash
+function calculateSHA1(buffer) {
+    return crypto.createHash('sha1').update(buffer).digest('hex');
+}
+
+// Function to print torrent information
+function printTorrentInfo(torrentInfo) {
+    const trackerUrl = torrentInfo.trackerUrl;
+    const fileLength = torrentInfo.fileLength;
+    const tmpBuff = Buffer.from(bencode(torrentInfo.info), "binary");
+    const hash = calculateSHA1(tmpBuff);
+    const pieceInfo = Buffer.from(torrentInfo.pieces, "binary");
+
+    // Print the extracted information
+    console.log(`Tracker URL: ${trackerUrl}`);
+    console.log(`Length: ${fileLength}`);
+    console.log(`Info Hash: ${hash}`);
+    console.log(`Piece Length: ${torrentInfo.pieceLength}`);
+
+    console.log('Piece Hashes:');
+    for (let i = 0; i < pieceInfo.length; i += 20) {
+        console.log(pieceInfo.slice(i, i + 20).toString("hex")); // Print each piece hash in hex format
+    }
+}
+
+// Main function to handle command-line arguments
 function main() {
     const command = process.argv[2];
-    
+
     if (command === "decode") {
         const bencodedValue = process.argv[3];
-        console.log(JSON.stringify(decodeBencode(bencodedValue)));
+        const result = decodeBencode(bencodedValue);
+        if (result) {
+            console.log(JSON.stringify(result));
+        }
     } else if (command === "info") {
         const torrentFile = process.argv[3];
         const torrentInfo = parseTorrentFile(torrentFile);
-        console.log(`Tracker URL: ${torrentInfo.trackerUrl}`);
-        console.log(`Length: ${torrentInfo.fileLength}`);
-        console.log(`Info Hash: ${torrentInfo.infoHash}`);
-        console.log(`Piece Length: ${torrentInfo.pieceLength}`);
-        console.log(`Piece Hashes: ${torrentInfo.pieces.join('')}`); // Print piece hashes without spaces
+        printTorrentInfo(torrentInfo); // Call the function to print torrent info
     } else {
         throw new Error(`Unknown command ${command}`);
     }
 }
+
+main();
