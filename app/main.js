@@ -106,18 +106,25 @@ function decodeNextElement(bencodedValue) {
 
 // Add encoding function to convert data back to bencode format
 function bencode(data) {
+    // Handle strings
     if (typeof data === 'string') {
         return `${data.length}:${data}`;
-    } else if (typeof data === 'number') {
+    }
+    // Handle numbers
+    else if (typeof data === 'number') {
         return `i${data}e`;
-    } else if (Array.isArray(data)) {
+    }
+    // Handle arrays
+    else if (Array.isArray(data)) {
         return `l${data.map(item => bencode(item)).join('')}e`;
-    } else if (typeof data === 'object' && data !== null) {
-        // Sort keys to ensure consistent encoding
+    }
+    // Handle objects (dictionaries)
+    else if (typeof data === 'object' && data !== null) {
         const sortedKeys = Object.keys(data).sort();
         return `d${sortedKeys.map(key => bencode(key) + bencode(data[key])).join('')}e`;
     }
-    throw new Error('Unsupported type for bencode');
+    // If the type is unsupported, throw an error
+    throw new Error('Unsupported type for bencode: ' + typeof data);
 }
 
 function calculateInfoHash(info) {
@@ -182,17 +189,17 @@ function calculateSHA1(buffer) {
 
 // Function to print torrent information
 function printTorrentInfo(torrentInfo) {
-    const trackerUrl = torrentInfo.trackerUrl;
-    const fileLength = torrentInfo.fileLength;
+    const trackerUrl = torrentInfo.announce;
+    const fileLength = torrentInfo.info.length;
     const tmpBuff = Buffer.from(bencode(torrentInfo.info), "binary");
     const hash = calculateSHA1(tmpBuff);
-    const pieceInfo = Buffer.from(torrentInfo.pieces, "binary");
+    const pieceInfo = Buffer.from(torrentInfo.info.pieces, "binary");
 
     // Print the extracted information
     console.log(`Tracker URL: ${trackerUrl}`);
     console.log(`Length: ${fileLength}`);
     console.log(`Info Hash: ${hash}`);
-    console.log(`Piece Length: ${torrentInfo.pieceLength}`);
+    console.log(`Piece Length: ${torrentInfo.info['piece length']}`);
 
     console.log('Piece Hashes:');
     for (let i = 0; i < pieceInfo.length; i += 20) {
