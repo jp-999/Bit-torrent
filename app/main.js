@@ -53,22 +53,22 @@ function decodeBencode(bencodedValue) {
 }
 
 // Helper function to decode next element and return its value and length
-function decodeNextElement(bencodedValue) {
+function decodeNextElement(bencodedValue, startIndex = 0) {
     // Handle dictionaries
-    if (bencodedValue[0] === 'd') {
+    if (bencodedValue[startIndex] === 'd') {
         const dict = {};
-        let index = 1;
+        let index = startIndex + 1;
         
         while (index < bencodedValue.length && bencodedValue[index] !== 'e') {
             // Get key
-            const { value: key, length: keyLength } = decodeNextElement(bencodedValue.slice(index));
+            const { value: key, length: keyLength } = decodeNextElement(bencodedValue, index);
             if (typeof key !== 'string') {
                 throw new Error("Dictionary keys must be strings");
             }
             index += keyLength;
             
             // Get value
-            const { value, length: valueLength } = decodeNextElement(bencodedValue.slice(index));
+            const { value, length: valueLength } = decodeNextElement(bencodedValue, index);
             index += valueLength;
             
             dict[key] = value;
@@ -76,26 +76,26 @@ function decodeNextElement(bencodedValue) {
         
         return {
             value: dict,
-            length: index + 1
+            length: index - startIndex + 1
         };
     }
     
     // Handle integers
-    if (bencodedValue[0] === 'i') {
-        const endIndex = bencodedValue.indexOf('e');
+    if (bencodedValue[startIndex] === 'i') {
+        const endIndex = bencodedValue.indexOf('e', startIndex);
         return {
-            value: parseInt(bencodedValue.substring(1, endIndex), 10),
-            length: endIndex + 1
+            value: parseInt(bencodedValue.substring(startIndex + 1, endIndex), 10),
+            length: endIndex - startIndex + 1
         };
     }
     
     // Handle strings
-    if (!isNaN(bencodedValue[0])) {
-        const colonIndex = bencodedValue.indexOf(':');
-        const length = parseInt(bencodedValue.substring(0, colonIndex), 10);
+    if (!isNaN(bencodedValue[startIndex])) {
+        const colonIndex = bencodedValue.indexOf(':', startIndex);
+        const length = parseInt(bencodedValue.substring(startIndex, colonIndex), 10);
         return {
             value: bencodedValue.substr(colonIndex + 1, length),
-            length: colonIndex + 1 + length
+            length: (colonIndex - startIndex) + 1 + length
         };
     }
     
@@ -112,23 +112,43 @@ function binaryToHex(binaryStr) {
     return result;
 }
 
-// Function to find raw info dictionary in bencoded data
-function findInfoDictionary(data) {
-    const infoIndex = data.indexOf('4:info');
-    if (infoIndex === -1) throw new Error("Could not find info dictionary");
+// Function to find the info dictionary position
+function findInfoDictionaryPosition(bencodedValue) {
+    let index = 0;
+    const stack = [];
     
-    let depth = 0;
-    let i = infoIndex + 6; // Skip "4:info"
+    while (index < bencodedValue.length) {
+        if (bencodedValue[index] === 'd') {
+            stack.push(index);
+        } else if (!isNaN(bencodedValue[index])) {
+            const colonIndex = bencodedValue.indexOf(':', index);
+            const length = parseInt(bencodedValue.substring(index, colonIndex), 10);
+            const value = bencodedValue.substring(colonIndex + 1, colonIndex + 1 + length);
+            
+            if (stack.length > 0 && value === 'info') {
+                const valueStart = bencodedValue.indexOf('d', colonIndex + 1 + length);
+                let depth = 1;
+                let end = valueStart + 1;
+                
+                while (depth > 0 && end < bencodedValue.length) {
+                    if (bencodedValue[end] === 'd') depth++;
+                    if (bencodedValue[end] === 'e') depth--;
+                    end++;
+                }
+                
+                return {
+                    start: valueStart,
+                    end: end
+                };
+            }
+            
+            index = colonIndex + 1 + length;
+            continue;
+        }
+        index++;
+    }
     
-    if (data[i] !== 'd') throw new Error("Info value is not a dictionary");
-    
-    do {
-        if (data[i] === 'd') depth++;
-        else if (data[i] === 'e') depth--;
-        i++;
-    } while (depth > 0 && i < data.length);
-    
-    return data.slice(infoIndex + 6, i);
+    throw new Error("Info dictionary not found");
 }
 
 // Function to parse torrent file and extract info
@@ -163,7 +183,8 @@ function parseTorrentFile(filePath) {
     }
     
     // Calculate info hash from raw info dictionary
-    const rawInfo = findInfoDictionary(content);
+    const infoPos = findInfoDictionaryPosition(content);
+    const rawInfo = content.slice(infoPos.start, infoPos.end);
     const crypto = require('crypto');
     const infoHash = crypto.createHash('sha1').update(rawInfo).digest('hex');
     
