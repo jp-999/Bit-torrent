@@ -114,41 +114,25 @@ function binaryToHex(binaryStr) {
 
 // Function to find the info dictionary position
 function findInfoDictionaryPosition(bencodedValue) {
-    let index = 0;
-    const stack = [];
+    const infoKey = '4:info';
+    const infoIndex = bencodedValue.indexOf(infoKey);
+    if (infoIndex === -1) throw new Error("Could not find info dictionary");
     
-    while (index < bencodedValue.length) {
-        if (bencodedValue[index] === 'd') {
-            stack.push(index);
-        } else if (!isNaN(bencodedValue[index])) {
-            const colonIndex = bencodedValue.indexOf(':', index);
-            const length = parseInt(bencodedValue.substring(index, colonIndex), 10);
-            const value = bencodedValue.substring(colonIndex + 1, colonIndex + 1 + length);
-            
-            if (stack.length > 0 && value === 'info') {
-                const valueStart = bencodedValue.indexOf('d', colonIndex + 1 + length);
-                let depth = 1;
-                let end = valueStart + 1;
-                
-                while (depth > 0 && end < bencodedValue.length) {
-                    if (bencodedValue[end] === 'd') depth++;
-                    if (bencodedValue[end] === 'e') depth--;
-                    end++;
-                }
-                
-                return {
-                    start: valueStart,
-                    end: end
-                };
-            }
-            
-            index = colonIndex + 1 + length;
-            continue;
-        }
-        index++;
-    }
+    let depth = 0;
+    let i = infoIndex + infoKey.length;
     
-    throw new Error("Info dictionary not found");
+    if (bencodedValue[i] !== 'd') throw new Error("Info value is not a dictionary");
+    
+    do {
+        if (bencodedValue[i] === 'd') depth++;
+        else if (bencodedValue[i] === 'e') depth--;
+        i++;
+    } while (depth > 0 && i < bencodedValue.length);
+    
+    return {
+        start: infoIndex + infoKey.length,
+        end: i
+    };
 }
 
 // Function to parse torrent file and extract info
