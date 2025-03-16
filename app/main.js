@@ -1,5 +1,6 @@
 const process = require("process");
 const fs = require("fs");
+const crypto = require("crypto");
 // Examples:
 // - decodeBencode("5:hello") -> "hello"
 // - decodeBencode("10:hello12345") -> "hello12345"
@@ -135,6 +136,13 @@ function findInfoDictionaryPosition(buffer) {
     };
 }
 
+// Function to calculate SHA-1 hash
+function calculateSHA1(inputBuffer) {
+    const sha1Hash = crypto.createHash("sha1");
+    sha1Hash.update(inputBuffer);
+    return sha1Hash.digest("hex");
+}
+
 // Function to parse torrent file and extract info
 function parseTorrentFile(filePath) {
     // Read the torrent file as a buffer
@@ -166,8 +174,7 @@ function parseTorrentFile(filePath) {
     // Calculate info hash from raw info dictionary
     const infoPos = findInfoDictionaryPosition(buffer);
     const rawInfo = buffer.slice(infoPos.start, infoPos.end);
-    const crypto = require('crypto');
-    const infoHash = crypto.createHash('sha1').update(rawInfo).digest('hex');
+    const infoHash = calculateSHA1(rawInfo);
     
     return {
         trackerUrl,
