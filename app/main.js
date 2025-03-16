@@ -112,26 +112,23 @@ function binaryToHex(binaryStr) {
     return result;
 }
 
-// Function to calculate info hash
-function calculateInfoHash(info) {
-    const bencodedInfo = encodeBencode(info);
-    const crypto = require('crypto');
-    return crypto.createHash('sha1').update(bencodedInfo).digest('hex');
-}
-
-// Function to encode bencoded values
-function encodeBencode(value) {
-    if (typeof value === 'string') {
-        return `${value.length}:${value}`;
-    } else if (typeof value === 'number') {
-        return `i${value}e`;
-    } else if (Array.isArray(value)) {
-        return `l${value.map(encodeBencode).join('')}e`;
-    } else if (typeof value === 'object' && value !== null) {
-        const sortedKeys = Object.keys(value).sort();
-        return `d${sortedKeys.map(key => encodeBencode(key) + encodeBencode(value[key])).join('')}e`;
-    }
-    throw new Error("Unsupported value type for bencoding");
+// Function to find raw info dictionary in bencoded data
+function findInfoDictionary(data) {
+    const infoIndex = data.indexOf('4:info');
+    if (infoIndex === -1) throw new Error("Could not find info dictionary");
+    
+    let depth = 0;
+    let i = infoIndex + 6; // Skip "4:info"
+    
+    if (data[i] !== 'd') throw new Error("Info value is not a dictionary");
+    
+    do {
+        if (data[i] === 'd') depth++;
+        else if (data[i] === 'e') depth--;
+        i++;
+    } while (depth > 0 && i < data.length);
+    
+    return data.slice(infoIndex + 6, i);
 }
 
 // Function to parse torrent file and extract info
@@ -165,13 +162,18 @@ function parseTorrentFile(filePath) {
         pieceHashes.push(binaryToHex(pieces.slice(i, i + 20)));
     }
     
+    // Calculate info hash from raw info dictionary
+    const rawInfo = findInfoDictionary(content);
+    const crypto = require('crypto');
+    const infoHash = crypto.createHash('sha1').update(rawInfo).digest('hex');
+    
     return {
         trackerUrl,
         fileLength: info.length,
         name: info.name,
         pieceLength: info['piece length'],
         pieceHashes,
-        infoHash: calculateInfoHash(info)
+        infoHash
     };
 }
 
