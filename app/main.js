@@ -1,9 +1,5 @@
 const process = require("process");
 const fs = require("fs");
-const axios = require('axios');
-const bencode = require('bencode'); // Ensure this package is installed
-const { Peer, Torrent } = require('./app/models'); // Adjust the import based on your project structure
-
 // Examples:
 // - decodeBencode("5:hello") -> "hello"
 // - decodeBencode("10:hello12345") -> "hello12345"
@@ -106,6 +102,38 @@ function decodeNextElement(bencodedValue) {
     throw new Error("Unsupported bencoded value");
 }
 
+// Function to convert binary string to hex
+function binaryToHex(binaryStr) {
+    let result = '';
+    for (let i = 0; i < binaryStr.length; i++) {
+        const hex = binaryStr.charCodeAt(i).toString(16).padStart(2, '0');
+        result += hex;
+    }
+    return result;
+}
+
+// Function to calculate info hash
+function calculateInfoHash(info) {
+    const bencodedInfo = encodeBencode(info);
+    const crypto = require('crypto');
+    return crypto.createHash('sha1').update(bencodedInfo).digest('hex');
+}
+
+// Function to encode bencoded values
+function encodeBencode(value) {
+    if (typeof value === 'string') {
+        return `${value.length}:${value}`;
+    } else if (typeof value === 'number') {
+        return `i${value}e`;
+    } else if (Array.isArray(value)) {
+        return `l${value.map(encodeBencode).join('')}e`;
+    } else if (typeof value === 'object' && value !== null) {
+        const sortedKeys = Object.keys(value).sort();
+        return `d${sortedKeys.map(key => encodeBencode(key) + encodeBencode(value[key])).join('')}e`;
+    }
+    throw new Error("Unsupported value type for bencoding");
+}
+
 // Function to parse torrent file and extract info
 function parseTorrentFile(filePath) {
     // Read the torrent file as a buffer
@@ -129,191 +157,46 @@ function parseTorrentFile(filePath) {
     if (!info.length || !info.name || !info['piece length'] || !info.pieces) {
         throw new Error("Invalid torrent file: missing required info fields");
     }
+
+    // Extract piece hashes (each hash is 20 bytes)
+    const pieceHashes = [];
+    const pieces = info.pieces;
+    for (let i = 0; i < pieces.length; i += 20) {
+        pieceHashes.push(binaryToHex(pieces.slice(i, i + 20)));
+    }
     
     return {
         trackerUrl,
         fileLength: info.length,
         name: info.name,
         pieceLength: info['piece length'],
-        pieces: info.pieces
+        pieceHashes,
+        infoHash: calculateInfoHash(info)
     };
 }
 
-async function main() {
+// Main program entry point
+function main() {
     const command = process.argv[2];
-
-    switch (command) {
-        case "decode":
-            const bencodedValue = Buffer.from(process.argv[3], 'utf-8');
-            const decodedValue = bencode.decode(bencodedValue);
-            console.log(JSON.stringify(decodedValue));
-            break;
-
-        case "info":
-            const torrentInfo = Torrent.fromFile(process.argv[3]);
-            torrentInfo.printInfo();
-            break;
-
-        case "peers":
-            const peersTorrent = Torrent.fromFile(process.argv[3]);
-            const peers = peersTorrent.getPeers();
-            peers.forEach(peer => console.log(peer));
-            break;
-
-        case "handshake":
-            const handshakeTorrent = Torrent.fromFile(process.argv[3]);
-            const [ip, port] = process.argv[4].split(":");
-            const peer = new Peer(ip, parseInt(port));
-            await performHandshakeStandalone(peer, handshakeTorrent.infoHash);
-            break;
-
-        case "download_piece":
-            const outputFilePathForPiece = process.argv[4];
-            const downloadTorrent = Torrent.fromFile(process.argv[5]);
-            console.log(`Total number of pieces: ${downloadTorrent.pieces.length}`);
-            const pieceIndex = parseInt(process.argv[6]);
-            await downloadPiece(downloadTorrent, pieceIndex, outputFilePathForPiece);
-            fs.renameSync(`${outputFilePathForPiece}.part${pieceIndex}`, outputFilePathForPiece);
-            break;
-
-        case "download":
-            const outputFilePathForDownload = process.argv[4];
-            const downloadTorrentFile = Torrent.fromFile(process.argv[5]);
-            downloadTorrentFile.getPeers();
-
-            console.log(`Total number of pieces: ${downloadTorrentFile.pieces.length}`);
-            console.log(`Found ${downloadTorrentFile.peers.length} peers.`);
-
-            const downloadTasks = [];
-            for (let pieceIndex = 0; pieceIndex < downloadTorrentFile.pieces.length; pieceIndex++) {
-                const peer = downloadTorrentFile.peers[pieceIndex % downloadTorrentFile.peers.length];
-                downloadTasks.push(downloadPiece(downloadTorrentFile, pieceIndex, outputFilePathForDownload, peer));
-            }
-
-            await Promise.all(downloadTasks);
-
-            const finalDownloadFile = fs.createWriteStream(outputFilePathForDownload);
-            for (let pieceIndex = 0; pieceIndex < downloadTorrentFile.pieces.length; pieceIndex++) {
-                const pieceFileName = `${outputFilePathForDownload}.part${pieceIndex}`;
-                const pieceData = fs.readFileSync(pieceFileName);
-                finalDownloadFile.write(pieceData);
-                fs.unlinkSync(pieceFileName);
-            }
-            finalDownloadFile.end();
-            break;
-
-        case "magnet_parse":
-            const magnetLink = process.argv[3];
-            const magnetTorrent = Torrent.fromMagnetLink(magnetLink);
-            break;
-
-        case "magnet_handshake":
-            const magnetHandshakeLink = process.argv[3];
-            const magnetHandshakeTorrent = Torrent.fromMagnetLink(magnetHandshakeLink);
-            magnetHandshakeTorrent.getPeers();
-            const handshakePeer = magnetHandshakeTorrent.peers[0];
-
-            const { reader: handshakeReader, writer: handshakeWriter } = await connectToPeer(handshakePeer);
-            await performHandshake(magnetHandshakeTorrent.infoHash, handshakeWriter, handshakeReader);
-            console.log("Waiting for bitfield message...");
-            await readMessage(5, handshakeWriter, handshakeReader);
-            await performExtensionHandshake(handshakeWriter, handshakeReader);
-            break;
-
-        case "magnet_info":
-            const magnetInfoLink = process.argv[3];
-            const magnetInfoTorrent = Torrent.fromMagnetLink(magnetInfoLink);
-            magnetInfoTorrent.getPeers();
-            const infoPeer = magnetInfoTorrent.peers[0];
-
-            const { reader: infoReader, writer: infoWriter } = await connectToPeer(infoPeer);
-            await performHandshake(magnetInfoTorrent.infoHash, infoWriter, infoReader);
-            await readMessage(5, infoWriter, infoReader);
-            await performExtensionHandshake(infoWriter, infoReader);
-            await sendRequestMetadataMessage(infoWriter);
-            const infoDict = await readDataMessage(infoWriter, infoReader);
-
-            infoWriter.close();
-            await infoWriter.waitClosed();
-
-            console.log("--------------------------------------------------");
-            magnetInfoTorrent.populateInfoFromDict(infoDict);
-            magnetInfoTorrent.printInfo();
-            break;
-
-        case "magnet_download_piece":
-            const magnetDownloadOutputFilePath = process.argv[4];
-            const magnetDownloadLink = process.argv[5];
-
-            const magnetDownloadTorrent = Torrent.fromMagnetLink(magnetDownloadLink);
-            magnetDownloadTorrent.getPeers();
-            const downloadPeerForMagnet = magnetDownloadTorrent.peers[0];
-
-            const { reader: downloadReader, writer: downloadWriter } = await connectToPeer(downloadPeerForMagnet);
-            await performHandshake(magnetDownloadTorrent.infoHash, downloadWriter, downloadReader);
-            await readMessage(5, downloadWriter, downloadReader);
-            await performExtensionHandshake(downloadWriter, downloadReader);
-            await sendRequestMetadataMessage(downloadWriter);
-            const downloadInfoDict = await readDataMessage(downloadWriter, downloadReader);
-
-            downloadWriter.close();
-            await downloadWriter.waitClosed();
-
-            magnetDownloadTorrent.populateInfoFromDict(downloadInfoDict);
-            console.log(`Total number of pieces: ${magnetDownloadTorrent.pieces.length}`);
-            const downloadPieceIndexForMagnet = parseInt(process.argv[6]);
-            await downloadPiece(magnetDownloadTorrent, downloadPieceIndexForMagnet, magnetDownloadOutputFilePath);
-            fs.renameSync(`${magnetDownloadOutputFilePath}.part${downloadPieceIndexForMagnet}`, magnetDownloadOutputFilePath);
-            break;
-
-        case "magnet_download":
-            const magnetDownloadOutputFilePathForDownload = process.argv[4];
-            const magnetDownloadLinkForDownload = process.argv[5];
-
-            const magnetDownloadTorrentForDownload = Torrent.fromMagnetLink(magnetDownloadLinkForDownload);
-            magnetDownloadTorrentForDownload.getPeers();
-            const downloadPeerForMagnetDownload = magnetDownloadTorrentForDownload.peers[0];
-
-            const { reader: downloadReaderForMagnet, writer: downloadWriterForMagnet } = await connectToPeer(downloadPeerForMagnetDownload);
-            await performHandshake(magnetDownloadTorrentForDownload.infoHash, downloadWriterForMagnet, downloadReaderForMagnet);
-            await readMessage(5, downloadWriterForMagnet, downloadReaderForMagnet);
-            await performExtensionHandshake(downloadWriterForMagnet, downloadReaderForMagnet);
-            await sendRequestMetadataMessage(downloadWriterForMagnet);
-            const downloadInfoDictForMagnet = await readDataMessage(downloadWriterForMagnet, downloadReaderForMagnet);
-
-            downloadWriterForMagnet.close();
-            await downloadWriterForMagnet.waitClosed();
-
-            magnetDownloadTorrentForDownload.populateInfoFromDict(downloadInfoDictForMagnet);
-            console.log(`Total number of pieces: ${magnetDownloadTorrentForDownload.pieces.length}`);
-            console.log(`Found ${magnetDownloadTorrentForDownload.peers.length} peers.`);
-
-            const downloadTasksForMagnet = [];
-            for (let pieceIndex = 0; pieceIndex < magnetDownloadTorrentForDownload.pieces.length; pieceIndex++) {
-                const peer = magnetDownloadTorrentForDownload.peers[pieceIndex % magnetDownloadTorrentForDownload.peers.length];
-                downloadTasksForMagnet.push(downloadPiece(magnetDownloadTorrentForDownload, pieceIndex, magnetDownloadOutputFilePathForDownload, peer));
-            }
-
-            await Promise.all(downloadTasksForMagnet);
-
-            const finalDownloadFileForMagnet = fs.createWriteStream(magnetDownloadOutputFilePathForDownload);
-            for (let pieceIndex = 0; pieceIndex < magnetDownloadTorrentForDownload.pieces.length; pieceIndex++) {
-                const pieceFileName = `${magnetDownloadOutputFilePathForDownload}.part${pieceIndex}`;
-                const pieceData = fs.readFileSync(pieceFileName);
-                finalDownloadFileForMagnet.write(pieceData);
-                fs.unlinkSync(pieceFileName);
-            }
-            finalDownloadFileForMagnet.end();
-            break;
-
-        default:
-            throw new Error(`Unknown command ${command}`);
+    
+    if (command === "decode") {
+        const bencodedValue = process.argv[3];
+        console.log(JSON.stringify(decodeBencode(bencodedValue)));
+    } else if (command === "info") {
+        const torrentFile = process.argv[3];
+        const torrentInfo = parseTorrentFile(torrentFile);
+        console.log(`Tracker URL: ${torrentInfo.trackerUrl}`);
+        console.log(`Length: ${torrentInfo.fileLength}`);
+        console.log(`Info Hash: ${torrentInfo.infoHash}`);
+        console.log(`Piece Length: ${torrentInfo.pieceLength}`);
+        console.log(`Piece Hashes:`);
+        torrentInfo.pieceHashes.forEach(hash => {
+            console.log(hash);
+        });
+    } else {
+        throw new Error(`Unknown command ${command}`);
     }
 }
 
-if (require.main === module) {
-    main().catch(err => {
-        console.error(err);
-        process.exit(1);
-    });
-}
+// Run the program
+main();
