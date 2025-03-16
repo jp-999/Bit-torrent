@@ -113,21 +113,21 @@ function binaryToHex(binaryStr) {
 }
 
 // Function to find the info dictionary position
-function findInfoDictionaryPosition(bencodedValue) {
-    const infoKey = '4:info';
-    const infoIndex = bencodedValue.indexOf(infoKey);
+function findInfoDictionaryPosition(buffer) {
+    const infoKey = Buffer.from('4:info');
+    const infoIndex = buffer.indexOf(infoKey);
     if (infoIndex === -1) throw new Error("Could not find info dictionary");
     
     let depth = 0;
     let i = infoIndex + infoKey.length;
     
-    if (bencodedValue[i] !== 'd') throw new Error("Info value is not a dictionary");
+    if (buffer[i] !== 'd'.charCodeAt(0)) throw new Error("Info value is not a dictionary");
     
     do {
-        if (bencodedValue[i] === 'd') depth++;
-        else if (bencodedValue[i] === 'e') depth--;
+        if (buffer[i] === 'd'.charCodeAt(0)) depth++;
+        else if (buffer[i] === 'e'.charCodeAt(0)) depth--;
         i++;
-    } while (depth > 0 && i < bencodedValue.length);
+    } while (depth > 0 && i < buffer.length);
     
     return {
         start: infoIndex + infoKey.length,
@@ -167,8 +167,8 @@ function parseTorrentFile(filePath) {
     }
     
     // Calculate info hash from raw info dictionary
-    const infoPos = findInfoDictionaryPosition(content);
-    const rawInfo = content.slice(infoPos.start, infoPos.end);
+    const infoPos = findInfoDictionaryPosition(buffer);
+    const rawInfo = buffer.slice(infoPos.start, infoPos.end);
     const crypto = require('crypto');
     const infoHash = crypto.createHash('sha1').update(rawInfo).digest('hex');
     
