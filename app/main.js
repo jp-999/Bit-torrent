@@ -8,40 +8,43 @@ const handleMagnetParse = require('./commands/magnet-parse');
 const MagnetHandshake = require('./commands/magnet-handshake');
 const MagnetInfo = require('./commands/magnet-info');
 const MagnetDownload = require('./commands/magnet-download');
-const fetch = require('node-fetch');
 
-const handlers = {
-  decode: handleDecode,
-  info: handleInfo,
-  peers: handlePeers,
-  handshake: handleHandshake,
-  download_piece: handleDownload,
-  download: handleDownload,
-  magnet_parse: handleMagnetParse,
-};
+(async () => {
+  const fetch = await import('node-fetch');
 
-const parameters = process.argv.slice(2);
-const [command] = parameters;
+  const handlers = {
+    decode: handleDecode,
+    info: handleInfo,
+    peers: handlePeers,
+    handshake: handleHandshake,
+    download_piece: handleDownload,
+    download: handleDownload,
+    magnet_parse: handleMagnetParse,
+  };
 
-if (command === 'magnet_handshake') {
-  const magnetHandshake = new MagnetHandshake();
-  magnetHandshake.handleCommand(parameters);
-} else if (command === 'magnet_info') {
-  const magnetInfo = new MagnetInfo();
-  magnetInfo.handleCommand(parameters);
-} else if (command === 'magnet_download' || command === 'magnet_download_piece') {
-  const magnetDownload = new MagnetDownload();
-  magnetDownload.handleCommand(parameters);
-} else {
-  const handler = handlers[command];
+  const parameters = process.argv.slice(2);
+  const [command] = parameters;
 
-  if (!handler) {
-    throw new Error(`Unknown command ${command}`);
+  if (command === 'magnet_handshake') {
+    const magnetHandshake = new MagnetHandshake();
+    magnetHandshake.handleCommand(parameters);
+  } else if (command === 'magnet_info') {
+    const magnetInfo = new MagnetInfo();
+    magnetInfo.handleCommand(parameters);
+  } else if (command === 'magnet_download' || command === 'magnet_download_piece') {
+    const magnetDownload = new MagnetDownload();
+    magnetDownload.handleCommand(parameters);
+  } else {
+    const handler = handlers[command];
+
+    if (!handler) {
+      throw new Error(`Unknown command ${command}`);
+    }
+
+    try {
+      handler(parameters);
+    } catch (err) {
+      console.error('Fatal error', err);
+    }
   }
-
-  try {
-    handler(parameters);
-  } catch (err) {
-    console.error('Fatal error', err);
-  }
-}
+})();
