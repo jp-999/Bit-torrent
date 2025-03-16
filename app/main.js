@@ -140,11 +140,8 @@ function parseTorrentFile(filePath) {
     // Read the torrent file as a buffer
     const buffer = fs.readFileSync(filePath);
     
-    // Convert buffer to string using latin1 encoding to preserve byte values
-    const content = buffer.toString('latin1');
-    
     // Decode the bencoded content
-    const torrentData = decodeBencode(content);
+    const torrentData = decodeBencode(buffer.toString('latin1'));
     
     // Extract required information
     const trackerUrl = torrentData.announce;
