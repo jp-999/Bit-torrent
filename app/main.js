@@ -8,6 +8,7 @@ const handleMagnetParse = require('./commands/magnet-parse');
 const MagnetHandshake = require('./commands/magnet-handshake');
 const MagnetInfo = require('./commands/magnet-info');
 const MagnetDownload = require('./commands/magnet-download');
+const fetch = require('node-fetch');
 
 const handlers = {
   decode: handleDecode,
