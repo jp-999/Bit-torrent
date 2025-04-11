@@ -1,4 +1,3 @@
-// Import necessary utility functions and modules for magnet link handling, networking, and data processing
 const {
   parseMagnetLink,
   fetchMagnetPeers,
@@ -22,59 +21,52 @@ const { sha1Hash } = require('../utils/encoder');
 const { writeFileSync } = require('fs');
 const HandshakeMixin = require('../mixins/handshake-mixin');
 
-// Constants for buffer size management
 const MAXIMUM_OUTGOING_BUFFER_SIZE = BLOCK_REQUEST_SIZE * 5;
 
-// Enum for peer connection states
 const PeerConnectionStatus = Object.freeze({
   PENDING: 'pending',
   HANDSHAKE_RECEIVED: 'handshake received',
   UNCHOKE_RECEIVED: 'unchoke received',
 });
 
-// Main class for handling magnet link downloads
 class MagnetDownload {
   constructor() {
-    // Initialize class properties
-    (this.blocks = new Map()), // Store downloaded blocks
-    (this.connectionStatus = PeerConnectionStatus.PENDING), // Track connection status
-    (this.incomingBuffer = Buffer.alloc(0)), // Buffer for incoming data
-    (this.outgoingBuffer = Buffer.alloc(0)), // Buffer for outgoing data
-    (this.peerMetadataExtensionId = undefined), // Store peer metadata extension ID
-    (this.torrent = {
-      info: {},
-    }); // Store torrent information
+    (this.blocks = new Map()),
+      (this.connectionStatus = PeerConnectionStatus.PENDING),
+      (this.incomingBuffer = Buffer.alloc(0)),
+      (this.outgoingBuffer = Buffer.alloc(0)),
+      (this.peerMetadataExtensionId = undefined),
+      (this.torrent = {
+        info: {},
+      });
   }
 
-  // Reset the state for new downloads
   resetState() {
     this.blocks = new Map();
     this.incomingBuffer = Buffer.alloc(0);
     this.outgoingBuffer = Buffer.alloc(0);
   }
 
-  // Process messages received from peers
   processPeerMessage(message) {
     const messageId = message.readUint8(0);
 
-    // Handle piece message
     if (messageId === MessageId.PIECE) {
       const blockPayload = message.subarray(1);
       const { pieceIndex, blockOffset, block } = parseBlockPayload(blockPayload);
+
       console.log(
         `Successfully fetched block. Piece index: ${pieceIndex}, Block offset: ${blockOffset}, Block size: ${block.length}`,
       );
+
       this.blocks.set(`${pieceIndex}-${blockOffset}`, block);
       return;
     }
 
-    // Handle unchoke message
     if (messageId === MessageId.UNCHOKE) {
       this.connectionStatus = PeerConnectionStatus.UNCHOKE_RECEIVED;
       return;
     }
 
-    // Handle extended message (metadata exchange)
     if (messageId === MessageId.EXTENDED) {
       const payload = message.subarray(1);
       const dictionary = payload.subarray(1);
@@ -104,12 +96,10 @@ class MagnetDownload {
     }
   }
 
-  // Handle incoming data from peer
   dataEventHandler(chunk) {
     console.log(`Response received: ${chunk.length} bytes`);
     this.incomingBuffer = Buffer.concat([this.incomingBuffer, chunk]);
 
-    // Process complete messages in the buffer
     while (this.incomingBuffer.length >= 4) {
       if (isHandshakeResponse(this.incomingBuffer)) {
         const { supportsExtension, peerId } = parseHandshake(this.incomingBuffer);
@@ -129,7 +119,6 @@ class MagnetDownload {
     }
   }
 
-  // Wait for handshake to be received
   async waitForHandshakeReceived() {
     return new Promise((resolve) => {
       const intervalId = setInterval(() => {
@@ -141,14 +130,12 @@ class MagnetDownload {
     });
   }
 
-  // Send accumulated messages to peer
   flushOutgoingBuffer(socket) {
     console.log(`Sending ${this.outgoingBuffer.length / BLOCK_REQUEST_SIZE} request messages to peer`);
     socket.write(this.outgoingBuffer);
     this.outgoingBuffer = Buffer.alloc(0);
   }
 
-  // Download a specific piece from peer
   async downloadPiece(socket, pieceIndex) {
     let blockOffset = 0;
     let totalBlockCount = 0;
@@ -187,7 +174,6 @@ class MagnetDownload {
     return this.convertMapToBuffer(this.blocks);
   }
 
-  // Convert downloaded blocks map to a buffer
   convertMapToBuffer() {
     const sortedBlocks = Array.from(this.blocks.entries())
       .sort(([a], [b]) => {
@@ -200,7 +186,6 @@ class MagnetDownload {
     return Buffer.concat(sortedBlocks);
   }
 
-  // Wait for all blocks to be received
   async waitForAllBlocks(totalBlockCount, timeout = 10000) {
     return new Promise((resolve, reject) => {
       let timeoutId, intervalId;
@@ -219,7 +204,6 @@ class MagnetDownload {
     });
   }
 
-  // Wait for peer metadata extension ID
   async waitForPeerMetadataExtensionId() {
     return new Promise((resolve) => {
       const intervalId = setInterval(() => {
@@ -231,7 +215,6 @@ class MagnetDownload {
     });
   }
 
-  // Wait for metadata response
   async waitForMetadataResponse() {
     return new Promise((resolve) => {
       const intervalId = setInterval(() => {
@@ -243,7 +226,6 @@ class MagnetDownload {
     });
   }
 
-  // Send interested message to peer
   async sendInterestedMessage(socket) {
     console.log('Sending interested message');
     const peerMessage = createPeerMessage(MessageId.INTERESTED);
@@ -252,7 +234,6 @@ class MagnetDownload {
     console.log('Unchoke received');
   }
 
-  // Wait for specific connection status
   async waitForConnectionStatus(expectedConnectionStatus, timeout = 5000) {
     return new Promise((resolve, reject) => {
       let timeoutId;
@@ -271,7 +252,6 @@ class MagnetDownload {
     });
   }
 
-  // Validate piece hash
   validatePieceHash(pieceBuffer, expectedPieceHash) {
     const actualPieceHash = sha1Hash(pieceBuffer, 'hex');
     const expectedPieceHashInHex = Buffer.from(expectedPieceHash).toString('hex');
@@ -286,24 +266,18 @@ class MagnetDownload {
     );
   }
 
-  // Main command handler
   async handleCommand(parameters) {
-    // Extract command parameters
     const [command, , outputFilePath, magnetLink, pieceIndexString] = parameters;
     const pieceIndex = Number(pieceIndexString);
-    
-    // Parse magnet link and get peers
     const { infoHash, trackerUrl } = parseMagnetLink(magnetLink);
+
     this.torrent.info_hash = infoHash;
     this.torrent.announce = trackerUrl;
 
-    // Connect to peer and download file
     const peers = await fetchMagnetPeers(infoHash, trackerUrl);
     const [peer] = peers;
     let socket;
-    
     try {
-      // Initialize connection and perform handshake
       socket = await connect(peer.host, peer.port, this.dataEventHandler.bind(this));
 
       const handshakeRequest = createMagnetHandshakeRequest(infoHash);
@@ -347,5 +321,6 @@ class MagnetDownload {
   }
 }
 
-//Export the MagnetDownload class
+//Object.assign(MagnetHandshake.prototype, HandshakeMixin);
+
 module.exports = MagnetDownload;
