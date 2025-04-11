@@ -44,20 +44,25 @@ function resetState() {
 
 // Event handler for incoming data from the peer
 function dataEventHandler(chunk) {
-  console.log(`Response received: ${chunk.length} bytes`);
+  console.log(`Response received: ${chunk.length} bytes, first 20 bytes: ${chunk.slice(0, Math.min(20, chunk.length)).toString('hex')}`);
   state.incomingBuffer = Buffer.concat([state.incomingBuffer, chunk]);
 
   while (state.incomingBuffer.length >= 4) {
     // Check for handshake response
     if (isHandshakeResponse(state.incomingBuffer)) {
+      console.log('Valid handshake response detected');
       state.connectionStatus = PeerConnectionStatus.HANDSHAKE_RECEIVED;
-      state.incomingBuffer = Buffer.alloc(0); // Reset buffer
+      state.incomingBuffer = state.incomingBuffer.slice(68); // Keep the rest of the buffer after handshake
+      console.log(`After handshake, buffer length: ${state.incomingBuffer.length}`);
       return;
     }
 
     // Read the message length
     const messageLength = state.incomingBuffer.readUInt32BE(0); // Read the 4-byte length prefix
-    if (state.incomingBuffer.length < messageLength + 4) break; // Wait for more data
+    if (state.incomingBuffer.length < messageLength + 4) {
+      console.log(`Incomplete message: expected ${messageLength + 4} bytes, got ${state.incomingBuffer.length}`);
+      break; // Wait for more data
+    }
 
     // Extract complete message
     const message = state.incomingBuffer.subarray(4, 4 + messageLength);
@@ -91,19 +96,27 @@ function processPeerMessage(message) {
 }
 
 // Function to wait for a specific connection status
-async function waitForConnectionStatus(expectedConnectionStatus, timeout = 5000) {
+async function waitForConnectionStatus(expectedConnectionStatus, timeout = 15000) {
+  console.log(`Waiting for connection status: ${expectedConnectionStatus}`);
   return new Promise((resolve, reject) => {
     let timeoutId;
     const intervalId = setInterval(() => {
       if (state.connectionStatus === expectedConnectionStatus) {
         clearInterval(intervalId);
         clearTimeout(timeoutId);
+        console.log(`Successfully received connection status: ${expectedConnectionStatus}`);
         resolve();
       }
-    }, 1);
+    }, 100); // Check less frequently to reduce CPU usage
 
     timeoutId = setTimeout(() => {
       clearInterval(intervalId);
+      console.error(`Timeout while waiting for connection status of ${expectedConnectionStatus}`);
+      console.error(`Current connection status: ${state.connectionStatus}`);
+      console.error(`Current buffer length: ${state.incomingBuffer.length} bytes`);
+      if (state.incomingBuffer.length > 0) {
+        console.error(`First few bytes of buffer: ${state.incomingBuffer.slice(0, Math.min(20, state.incomingBuffer.length)).toString('hex')}`);
+      }
       reject(new Error(`Timeout while waiting for connection status of ${expectedConnectionStatus}`));
     }, timeout);
   });
@@ -133,8 +146,20 @@ async function performHandshake(socket, torrent) {
   const handshakeRequest = createHandshakeRequest(torrent.info);
   console.log('Sending handshake message');
   socket.write(handshakeRequest);
-  await waitForConnectionStatus(PeerConnectionStatus.HANDSHAKE_RECEIVED);
-  console.log('Handshake successful');
+  
+  try {
+    await waitForConnectionStatus(PeerConnectionStatus.HANDSHAKE_RECEIVED);
+    console.log('Handshake successful');
+  } catch (error) {
+    console.error('Handshake failed:', error.message);
+    
+    // Try to send the handshake again after a brief delay
+    console.log('Retrying handshake...');
+    await new Promise(resolve => setTimeout(resolve, 1000));
+    socket.write(handshakeRequest);
+    await waitForConnectionStatus(PeerConnectionStatus.HANDSHAKE_RECEIVED);
+    console.log('Handshake successful on retry');
+  }
 }
 
 // Function to send an interested message to the peer
@@ -216,16 +241,6 @@ function flushOutgoingBuffer(socket) {
   state.outgoingBuffer = Buffer.alloc(0); // Reset the outgoing buffer
 }
 
-// Function to initialize peer communication
-async function initialisePeerCommunication(peer, torrent) {
-  const startTime = Date.now();
-  const socket = await connect(peer.host, peer.port, dataEventHandler);
-  await performHandshake(socket, torrent);
-  await sendInterestedMessage(socket);
-  console.log(`Initialised communication with peer in ${Date.now() - startTime} ms`);
-  return socket;
-}
-
 // Main function to handle the download command
 async function handleCommand(parameters) {
   const [command, , outputFilePath, inputFile, pieceIndexString] = parameters;
@@ -235,6 +250,13 @@ async function handleCommand(parameters) {
   const torrent = decodeTorrent(buffer); // Decode the torrent data
   const peers = await fetchPeers(torrent); // Fetch peers from the tracker
 
+  console.log('----------------------------');
+  console.log(`file length: ${torrent.info.length}`);
+  console.log(`piece length: ${torrent.info.pieceLength}`);
+  console.log(`number of pieces: ${torrent.info.splitPieces.length}`);
+  console.log('----------------------------');
+  console.log(`peers ${JSON.stringify(peers, null, 2)}`);
+
   let workQueue;
   if (command === 'download') {
     workQueue = Array.from({ length: torrent.info.splitPieces.length }, (_, index) => index); // Create a queue for all pieces
@@ -242,22 +264,63 @@ async function handleCommand(parameters) {
     workQueue = [pieceIndex]; // Queue the specific piece to download
   }
 
-  const socket = await initialisePeerCommunication(peers[0], torrent); // Initialize communication with the first peer
+  // Try each peer until successful
+  let socket = null;
+  let connectedPeer = null;
+  
+  for (let i = 0; i < peers.length; i++) {
+    const peer = peers[i];
+    console.log(`Attempting to connect to peer ${i+1}/${peers.length}: ${peer.host}:${peer.port}`);
+    
+    try {
+      resetState(); // Reset state for each connection attempt
+      socket = await connect(peer.host, peer.port, dataEventHandler);
+      try {
+        await performHandshake(socket, torrent);
+        await sendInterestedMessage(socket);
+        connectedPeer = peer;
+        console.log(`Successfully established communication with peer: ${peer.host}:${peer.port}`);
+        break; // Successfully connected and performed handshake
+      } catch (handshakeError) {
+        console.error(`Failed to perform handshake with peer ${peer.host}:${peer.port}: ${handshakeError.message}`);
+        disconnect(socket);
+        socket = null;
+      }
+    } catch (connectionError) {
+      console.error(`Failed to connect to peer ${peer.host}:${peer.port}: ${connectionError.message}`);
+    }
+  }
+
+  if (!socket || !connectedPeer) {
+    throw new Error('Failed to connect to any peer');
+  }
+
+  console.log(`Initialised communication with peer ${connectedPeer.host}:${connectedPeer.port}`);
+
   try {
     let fileBuffer = Buffer.alloc(0);
     for (const pieceIndex of workQueue) {
-      const pieceBuffer = await downloadPiece(socket, pieceIndex, torrent); // Download the piece
-      validatePieceHash(pieceBuffer, torrent.info.splitPieces[pieceIndex]); // Validate the piece hash
-      fileBuffer = Buffer.concat([fileBuffer, pieceBuffer]); // Concatenate the downloaded piece
-      resetState(); // Reset the state for the next piece
+      console.log(`Downloading piece ${pieceIndex + 1}/${workQueue.length}`);
+      try {
+        const pieceBuffer = await downloadPiece(socket, pieceIndex, torrent); // Download the piece
+        validatePieceHash(pieceBuffer, torrent.info.splitPieces[pieceIndex]); // Validate the piece hash
+        fileBuffer = Buffer.concat([fileBuffer, pieceBuffer]); // Concatenate the pieces
+      } catch (pieceError) {
+        console.error(`Error downloading piece ${pieceIndex}: ${pieceError.message}`);
+        throw pieceError;
+      }
     }
 
-    console.log(`Download finished. Saving to ${outputFilePath}. Size: ${fileBuffer.length}`);
-    writeFileSync(outputFilePath, Buffer.from(fileBuffer)); // Save the downloaded file
-  } catch (err) {
-    console.error('Failed to download file:', err); // Log any errors during download
+    // Truncate the file to the correct length (last piece might be shorter)
+    if (fileBuffer.length > torrent.info.length) {
+      fileBuffer = fileBuffer.subarray(0, torrent.info.length);
+    }
+
+    writeFileSync(outputFilePath, fileBuffer); // Write the file to disk
+    console.log(`Successfully downloaded file to ${outputFilePath}`);
   } finally {
-    disconnect(socket); // Ensure the socket is disconnected
+    // Clean up the connection
+    disconnect(socket);
   }
 }
 
