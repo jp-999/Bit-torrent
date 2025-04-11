@@ -1,8 +1,7 @@
-// Function to parse an integer from a bencoded buffer starting at a given offset
 function parseInteger(buffer, offset) {
   let cursor = offset;
 
-  // Confirm the first character is the letter 'i'
+  // confirm first characters is the letter i
   const firstCharacter = String.fromCharCode(buffer.readInt8(cursor));
   cursor++;
 
@@ -10,21 +9,18 @@ function parseInteger(buffer, offset) {
     throw new Error('Invalid number encoding. Invalid first character');
   }
 
-  // Find the position of the terminator character 'e'
   const terminatorPosition = buffer.indexOf('e', cursor);
 
   if (terminatorPosition === -1) {
     throw new Error('Invalid number encoding. Missing terminator character');
   }
 
-  // Extract the number string and convert it to a number
   const result = buffer.subarray(cursor, terminatorPosition).toString();
   cursor += result.length + 1;
 
-  return { value: Number(result), newCursor: cursor }; // Return the parsed value and new cursor position
+  return { value: Number(result), newCursor: cursor };
 }
 
-// Function to parse a byte string from a bencoded buffer starting at a given offset
 function parseByteString(bencodedValue, offset) {
   let cursor = offset;
   const delimiterPosition = bencodedValue.indexOf(':', cursor);
@@ -33,23 +29,20 @@ function parseByteString(bencodedValue, offset) {
     throw new Error('Invalid string encoding. Missing colon delimiter.');
   }
 
-  // Get the length of the string
   const stringLength = Number(bencodedValue.subarray(cursor, delimiterPosition));
   cursor += stringLength.toString().length + 1;
 
-  // Extract the string value
   const value = bencodedValue.subarray(cursor, cursor + stringLength);
   cursor += value.length;
 
-  return { value, newCursor: cursor }; // Return the parsed value and new cursor position
+  return { value, newCursor: cursor };
 }
 
-// Function to parse a list from a bencoded buffer starting at a given offset
 function parseList(buffer, offset = 0) {
   let cursor = offset;
-  cursor++; // Skip the first character since we've already read it previously
+  cursor++; // skip first character since we've already read it previously
 
-  const values = []; // Array to hold the parsed values
+  const values = [];
 
   do {
     const currentChar = String.fromCharCode(buffer.readInt8(cursor));
@@ -58,51 +51,50 @@ function parseList(buffer, offset = 0) {
       if (currentChar === 'i') {
         const { value, newCursor } = parseInteger(buffer, cursor);
         cursor = newCursor;
-        values.push(value); // Add the parsed integer to the values array
+        values.push(value);
       }
       if (currentChar === 'l') {
         const { values: nestedValues, newCursor } = parseList(buffer, cursor);
         cursor = newCursor;
-        values.push(nestedValues); // Add the nested list to the values array
+        values.push(nestedValues);
       }
 
       if (currentChar === 'e') {
-        // Terminator character found at the end of the list
+        // terminator char found at the end of the list
         cursor++;
         break;
       }
     } else {
       const { value, newCursor } = parseByteString(buffer, cursor);
       cursor = newCursor;
-      values.push(value); // Add the parsed string to the values array
+      values.push(value);
     }
   } while (cursor < buffer.length);
 
-  return { values, newCursor: cursor }; // Return the parsed values and new cursor position
+  return { values, newCursor: cursor };
 }
 
-// Function to parse a dictionary from a bencoded buffer starting at a given offset
 function parseDictionary(buffer, offset) {
   let cursor = offset;
-  cursor++; // Skip the first character since we've already read it previously
+  cursor++; // skip first character since we've already read it previously
 
-  const values = {}; // Object to hold the parsed key-value pairs
+  const values = {};
   do {
     let currentChar = String.fromCharCode(buffer.readInt8(cursor));
 
-    // Get the key
+    // get key
     let dictionaryKey;
     if (isNaN(currentChar)) {
       if (currentChar === 'e') {
         cursor++;
-        break; // End of dictionary
+        break;
       } else {
         throw new Error(`Invalid key encoding found for dictionary: ${buffer.toString()}`);
       }
     } else {
       const { value, newCursor } = parseByteString(buffer, cursor);
       cursor = newCursor;
-      dictionaryKey = value.toString(); // Convert the key to a string
+      dictionaryKey = value.toString();
     }
 
     currentChar = String.fromCharCode(buffer.readInt8(cursor));
@@ -112,30 +104,28 @@ function parseDictionary(buffer, offset) {
       if (currentChar === 'i') {
         const { value, newCursor } = parseInteger(buffer, cursor);
         cursor = newCursor;
-        dictionaryValue = value; // Store the parsed integer as the value
+        dictionaryValue = value;
       } else if (currentChar === 'l') {
         const { values, newCursor } = parseList(buffer, cursor);
         cursor = newCursor;
-        dictionaryValue = values; // Store the parsed list as the value
+        dictionaryValue = values;
       } else if (currentChar === 'd') {
         const { values, newCursor } = parseDictionary(buffer, cursor);
         cursor = newCursor;
-        dictionaryValue = values; // Store the parsed dictionary as the value
+        dictionaryValue = values;
       } else {
         throw new Error(`Invalid value encoding found for dictionary: ${buffer.toString()}`);
       }
     } else {
       const { value, newCursor } = parseByteString(buffer, cursor);
       cursor = newCursor;
-      dictionaryValue = value; // Store the parsed string as the value
+      dictionaryValue = value;
     }
-    values[dictionaryKey] = dictionaryValue; // Add the key-value pair to the dictionary
+    values[dictionaryKey] = dictionaryValue;
   } while (cursor < buffer.length);
-  
-  return { values, newCursor: cursor }; // Return the parsed dictionary and new cursor position
+  return { values, newCursor: cursor };
 }
 
-// Function to decode a bencoded buffer
 function decodeBencode(buffer) {
   if (!Buffer.isBuffer(buffer)) {
     throw new Error('Invalid parameter type. Parameter must be a buffer');
@@ -144,28 +134,27 @@ function decodeBencode(buffer) {
   const firstCharacter = String.fromCharCode(buffer.readInt8(0));
   const lastCharacter = String.fromCharCode(buffer.readInt8(buffer.length - 1));
 
-  // Determine the type of the bencoded value based on the first character
   if (isNaN(firstCharacter)) {
     if (firstCharacter === 'i') {
       const { value } = parseInteger(buffer, 0);
-      return value; // Return the parsed integer
+      return value;
     }
     if (firstCharacter === 'l' && lastCharacter === 'e') {
       const { values } = parseList(buffer, 0);
-      return values; // Return the parsed list
+      return values;
     }
 
     if (firstCharacter === 'd') {
       const { values } = parseDictionary(buffer, 0);
-      return values; // Return the parsed dictionary
+
+      return values;
     }
 
     throw new Error(`Invalid value ${buffer}. Unsupported encoding.`);
   } else {
     const { value } = parseByteString(buffer, 0);
-    return value; // Return the parsed string
+    return value;
   }
 }
 
-// Export the decodeBencode function for use in other modules
 module.exports = { decodeBencode };
