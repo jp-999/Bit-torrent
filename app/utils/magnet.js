@@ -1,6 +1,7 @@
 const { generatePeerId, urlEncodeInfoHash, parsePeers } = require('./torrent');
 const { decodeBencode } = require('./decoder');
 const { bencode } = require('./encoder');
+const fetch = require('node-fetch');
 
 function printBufferInDecimal(buffer) {
   return Array.from(buffer).join(' ');
