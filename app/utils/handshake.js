@@ -1,11 +1,6 @@
 function isHandshakeResponse(handshakeResponse) {
-  if (!handshakeResponse || handshakeResponse.length < 1) {
-    console.log(`Handshake check: Empty buffer`);
-    return false;
-  }
-  
-  if (handshakeResponse.length < 68) {
-    console.log(`Handshake check: Buffer too small (${handshakeResponse.length} bytes), waiting for more data`);
+  if (!handshakeResponse || handshakeResponse.length < 68) {
+    console.log(`Handshake check: Buffer too small (${handshakeResponse ? handshakeResponse.length : 0} bytes)`);
     return false;
   }
 
@@ -14,20 +9,16 @@ function isHandshakeResponse(handshakeResponse) {
     
     // BitTorrent protocol is 19 bytes long
     if (protocolLength !== 19) {
-      // If we're seeing 0 as the first byte, it might be a piece response or other message
-      // We should just return false without logging an error as it's probably not a handshake
-      if (protocolLength === 0 && handshakeResponse.length >= 4) {
-        const msgLength = handshakeResponse.readUInt32BE(0);
-        if (msgLength > 0 && msgLength < 16384) { // Reasonable piece message size
-          return false; // Likely a piece message, not a handshake
-        }
-      }
-      
       console.log(`Handshake check: Invalid protocol length: ${protocolLength}, expected 19`);
       return false;
     }
     
-    // Check the protocol string
+    // Check if we have enough bytes to read the protocol name
+    if (handshakeResponse.length < protocolLength + 1) {
+      console.log(`Handshake check: Buffer too small for protocol name (${handshakeResponse.length} bytes)`);
+      return false;
+    }
+    
     const protocol = handshakeResponse.subarray(1, protocolLength + 1).toString();
     const isValidProtocol = protocol === 'BitTorrent protocol';
     
