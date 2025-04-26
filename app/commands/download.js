@@ -319,9 +319,45 @@ async function initialisePeerCommunication(peer, torrent) {
 
 // Main command handler
 async function handleCommand(parameters) {
-  const [command, inputFile, pieceIndex, outputFile] = parameters;
+  // Parse parameters with proper flag handling
+  let inputFile, outputFile, pieceIndex;
+  const command = parameters[0];
+  
+  // Check if we're downloading a piece or the whole file
   const isDownloadCommand = command === 'download';
   
+  // Parse parameters
+  for (let i = 1; i < parameters.length; i++) {
+    const param = parameters[i];
+    
+    if (param === '-o') {
+      // The next parameter is the output file
+      if (i + 1 < parameters.length) {
+        outputFile = parameters[i + 1];
+        i++; // Skip the next parameter as we've already processed it
+      }
+    } else if (!inputFile) {
+      // The first non-flag parameter is the input file
+      inputFile = param;
+    } else if (!isDownloadCommand && !pieceIndex) {
+      // If we're downloading a piece, the second non-flag parameter is the piece index
+      pieceIndex = param;
+    }
+  }
+  
+  // Check if we have all required parameters
+  if (!inputFile) {
+    throw new Error('Missing torrent file parameter');
+  }
+  
+  if (!outputFile) {
+    throw new Error('Missing output file parameter (use -o flag)');
+  }
+  
+  if (!isDownloadCommand && pieceIndex === undefined) {
+    throw new Error('Missing piece index parameter for download_piece command');
+  }
+
   try {
     console.log(`Reading torrent file: ${inputFile}`);
     const buffer = await readFile(inputFile);
