@@ -1,11 +1,16 @@
-const { parseMagnetLink } = require('../utils/magnet');
+const { readFile } = require('fs/promises');
+const { decodeBencode } = require('../utils/decoder');
+const { fetchPeers } = require('../utils/torrent');
 
 async function handleCommand(parameters) {
-  const [, magnetLink] = parameters;
+  const [, inputFile] = parameters;
+  const buffer = await readFile(inputFile);
+  const torrent = decodeBencode(buffer);
+  const peers = await fetchPeers(torrent);
 
-  const { infoHash, fileName, trackerUrl } = parseMagnetLink(magnetLink);
-  console.log(`Tracker URL: ${trackerUrl}`);
-  console.log(`Info Hash: ${infoHash}`);
+  peers.forEach(({ host, port }) => {
+    console.log(`${host}:${port}`);
+  });
 }
 
 module.exports = handleCommand;
