@@ -1,6 +1,5 @@
 const { decodeBencode } = require('./decoder');
 
-// Test case to decode a simple bencoded string
 test('decodes a bencoded string', () => {
   // act
   const actual = decodeBencode(Buffer.from('10:hello12345')).toString();
@@ -9,7 +8,6 @@ test('decodes a bencoded string', () => {
   expect(actual).toBe('hello12345');
 });
 
-// Test case to decode a bencoded positive integer
 test('decodes a bencoded positive integer', () => {
   // act
   const actual = decodeBencode(Buffer.from('i54e'));
@@ -18,7 +16,6 @@ test('decodes a bencoded positive integer', () => {
   expect(actual).toEqual(54);
 });
 
-// Test case to decode a bencoded negative integer
 test('decodes a bencoded negative integer', () => {
   // act
   const actual = decodeBencode(Buffer.from('i-54e'));
@@ -27,12 +24,10 @@ test('decodes a bencoded negative integer', () => {
   expect(actual).toEqual(-54);
 });
 
-// Test case to ensure an error is thrown for unsupported encoding
 test('throws an error when the encoding is unsupported', () => {
   expect(() => decodeBencode(Buffer.from('a54e'))).toThrow('Invalid value a54e. Unsupported encoding.');
 });
 
-// Test case to decode a bencoded list with a single number value
 test('decodes a bencoded list with a single number value', () => {
   // act
   const actual = decodeBencode(Buffer.from('li58ee'));
@@ -41,7 +36,6 @@ test('decodes a bencoded list with a single number value', () => {
   expect(actual).toEqual([58]);
 });
 
-// Test case to decode a bencoded list with a single string value
 test('decodes a bencoded list with a single string value', () => {
   // act
   const actual = decodeBencode(Buffer.from('l5:helloe'));
@@ -50,7 +44,6 @@ test('decodes a bencoded list with a single string value', () => {
   expect(actual).toEqual([Buffer.from('hello')]);
 });
 
-// Test case to decode a bencoded list with two values: string and number
 test('decodes a bencoded list with two values: string and number', () => {
   // act
   const actual = decodeBencode(Buffer.from('l5:helloi721ee'));
@@ -59,7 +52,6 @@ test('decodes a bencoded list with two values: string and number', () => {
   expect(actual).toEqual([Buffer.from('hello'), 721]);
 });
 
-// Test case to decode a bencoded list with two values: number and string
 test('decodes a bencoded list with two values: number and string', () => {
   // act
   const actual = decodeBencode(Buffer.from('li123e3:doge'));
@@ -68,7 +60,6 @@ test('decodes a bencoded list with two values: number and string', () => {
   expect(actual).toEqual([123, Buffer.from('dog')]);
 });
 
-// Test case to decode a bencoded list with two number values
 test('decodes a bencoded list with two number values', () => {
   // act
   const actual = decodeBencode(Buffer.from('li721ei1842ee'));
@@ -77,7 +68,6 @@ test('decodes a bencoded list with two number values', () => {
   expect(actual).toEqual([721, 1842]);
 });
 
-// Test case to decode a bencoded list with multiple values
 test('decodes a bencoded list with multiple values', () => {
   // act
   const actual = decodeBencode(Buffer.from('li721ei1842e12:civilisationi12345678e4:moone'));
@@ -86,7 +76,6 @@ test('decodes a bencoded list with multiple values', () => {
   expect(actual).toEqual([721, 1842, Buffer.from('civilisation'), 12345678, Buffer.from('moon')]);
 });
 
-// Test case to decode an empty bencoded list
 test('decodes an empty bencoded list', () => {
   // act
   const actual = decodeBencode(Buffer.from('le'));
@@ -95,7 +84,6 @@ test('decodes an empty bencoded list', () => {
   expect(actual).toEqual([]);
 });
 
-// Test case to decode a nested list
 test('decodes a nested list', () => {
   // act
   const actual = decodeBencode(Buffer.from('lli816e9:blueberryee'));
@@ -104,7 +92,6 @@ test('decodes a nested list', () => {
   expect(actual).toEqual([[816, Buffer.from('blueberry')]]);
 });
 
-// Test case to decode a dictionary
 test('decodes a dictionary', () => {
   // act
   const actual = decodeBencode(Buffer.from('d3:foo3:bar5:helloi52ee'));
@@ -113,7 +100,6 @@ test('decodes a dictionary', () => {
   expect(actual).toEqual({ foo: Buffer.from('bar'), hello: 52 });
 });
 
-// Test case to decode a dictionary with a nested dictionary
 test('decodes a dictionary with a nested dictionary', () => {
   // act
   const actual = decodeBencode(Buffer.from('d10:inner_dictd4:key16:value14:key2i42e8:list_keyl5:item15:item2i3eeee'));
