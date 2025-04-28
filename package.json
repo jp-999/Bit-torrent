@@ -16,6 +16,11 @@
         "prettier": "^3.3.3"
     },
     "dependencies": {
-        "node-fetch": "^2.7.0"
+        "body-parser": "^2.2.0",
+        "cors": "^2.8.5",
+        "express": "^5.1.0",
+        "multer": "^1.4.5-lts.2",
+        "node-fetch": "^2.7.0",
+        "uuid": "^11.1.0"
     }
 }
